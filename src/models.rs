@@ -30,6 +30,13 @@ pub struct PlumePrediction {
     pub plume_line_json: String, // ST_AsGeoJSON representation of the LineString
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MethanePlumeResponse {
+    pub recorded_at: DateTime<Utc>,
+    pub emission_rate_kg_hr: f64,
+    pub geometry: serde_json::Value,
+}
+
 // BMKG JSON Models
 #[derive(Debug, Deserialize)]
 pub struct BmkgResponse {
@@ -51,7 +58,7 @@ pub struct BmkgForecastItem {
     pub wd_deg: f64,
 }
 
-// STAC Models
+// STAC Models (Carbon Mapper)
 #[derive(Debug, Deserialize)]
 pub struct StacResponse {
     pub features: Vec<StacFeature>,
@@ -66,6 +73,6 @@ pub struct StacFeature {
 #[derive(Debug, Deserialize)]
 pub struct StacProperties {
     pub datetime: String,
-    #[serde(rename = "eo:cloud_cover")]
-    pub cloud_cover: f64,
+    #[serde(default)]
+    pub emission_rate_kg_hr: f64,
 }

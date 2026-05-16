@@ -9,3 +9,6 @@ skills-lock.json
 
 # Large PDFs & Reference Materials
 *.pdf
+
+# Security
+.env
