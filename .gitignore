@@ -1,0 +1,11 @@
+/target
+.env
+**/*.rs.bk
+Cargo.lock
+
+# AI Agent local tracking
+.agents/
+skills-lock.json
+
+# Large PDFs & Reference Materials
+*.pdf

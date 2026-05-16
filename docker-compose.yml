@@ -1,0 +1,22 @@
+version: '3.8'
+services:
+  db:
+    image: timescale/timescaledb-ha:pg15-latest
+    container_name: geoesg_db
+    environment:
+      - POSTGRES_USER=geo_admin
+      - POSTGRES_PASSWORD=geo_secure_password
+      - POSTGRES_DB=geoesg_aeco
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geo_admin -d geoesg_aeco"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
