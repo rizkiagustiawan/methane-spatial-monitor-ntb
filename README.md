@@ -1,41 +1,48 @@
-# GeoESG A.E.C.O - Methane Plume & Dispersion Tracking
+# NTB Methane Tracker - GeoESG A.E.C.O
 
-Backend system for real-time methane emission tracking and dispersion prediction at **TPA Regional Kebon Kongok, Lombok Barat**.
+Advanced real-time methane emission tracking and dispersion prediction system for **TPA Regional Kebon Kongok, Lombok Barat, NTB**.
 
 ## Tech Stack
-- **Language:** Rust (Axum, Tokio, SQLx)
-- **Database:** PostgreSQL + PostGIS + TimescaleDB
+- **Backend:** Rust (Axum, Tokio, SQLx)
+- **Frontend:** HTML5, Leaflet.js, CartoDB Dark Matter
+- **Database:** PostgreSQL + PostGIS (Spatial Intelligence)
 - **Data Sources:** 
-  - **BMKG:** Real-time wind speed and direction (JSON API).
-  - **Sentinel-2 (Element 84):** Satellite imagery metadata over Lombok Barat.
-- **Infrastucture:** Docker Compose
+  - **BMKG:** Real-time weather API (Wind & Temp).
+  - **Carbon Mapper:** STAC API for high-resolution methane plume detection.
+  - **Open-Meteo:** Secondary fallback for regional weather data.
 
-## Features
-1. **Automated Data Ingestion:**
-   - Hourly weather updates from BMKG.
-   - Daily STAC metadata tracking for Sentinel-2.
-2. **Spatial Analytics:**
-   - Real-time plume dispersion prediction using PostGIS `ST_Project` and `ST_MakeLine`.
-3. **REST API:**
-   - `GET /api/weather`: Latest weather observations.
-   - `GET /api/methane`: Latest methane/cloud metrics with GeoJSON locations.
-   - `GET /api/plume-prediction`: Projected 1-hour methane trajectory line.
+## Key Features
+1. **Interactive Dashboard:**
+   - Real-time visualization of methane plumes on a dark-themed geographic map.
+   - Live prediction of gas dispersion footprints.
+2. **Gaussian Plume Dispersion:**
+   - Scientifically rigorous 1-hour dispersion modeling.
+   - Uses Pasquill-Gifford Class D stability approximation to generate 2D polygon footprints.
+3. **Automated Data Pipeline:**
+   - Hourly weather syncing from BMKG.
+   - Automated STAC metadata tracking for methane observations.
+4. **Spatial API:**
+   - `GET /`: Serves the interactive map dashboard.
+   - `GET /api/methane/plumes`: Returns detected plumes as GeoJSON.
+   - `GET /api/plume-prediction`: Returns the 2D Gaussian dispersion footprint.
 
-## Setup
-1. **Start Database:**
+## Quick Start
+1. **Infrastructure:**
    ```bash
    docker compose up -d
    ```
-2. **Configure Environment:**
-   Create `.env` file:
+2. **Configuration:**
+   Add required tokens to your `.env`:
    ```env
    DATABASE_URL=postgres://geo_admin:geo_secure_password@localhost:5432/geoesg_aeco
+   CARBON_MAPPER_TOKEN=your_token_here
    ```
-3. **Run Application:**
+3. **Launch:**
    ```bash
    cargo run
    ```
+   Access the dashboard at: **http://localhost:3000**
 
-## Target Location
-- **Center Point:** -8.645458, 116.091589 (TPA Kebon Kongok)
-- **BBOX:** `[116.08, -8.66, 116.10, -8.63]`
+## Technical Methodology
+- **Dispersion:** Triangular wedge calculation using `ST_Project` and `ST_MakePolygon` based on a 12.5-degree dispersion angle.
+- **Backend Architecture:** Asynchronous task spawning for background data tracking without blocking the API server.

@@ -20,6 +20,7 @@ pub struct WeatherObservation {
     pub wind_direction_deg: Option<f64>,
     pub humidity_percent: Option<f64>,
     pub temperature_c: Option<f64>,
+    pub data_source: String,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -56,6 +57,20 @@ pub struct BmkgForecastItem {
     pub ws: f64,
     pub wd: String,
     pub wd_deg: f64,
+}
+
+// Open-Meteo Models
+#[derive(Debug, Deserialize)]
+pub struct OpenMeteoResponse {
+    pub current: CurrentWeather,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CurrentWeather {
+    pub temperature_2m: f64,
+    pub relative_humidity_2m: f64,
+    pub wind_speed_10m: f64,
+    pub wind_direction_10m: f64,
 }
 
 // STAC Models (Carbon Mapper)
