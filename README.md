@@ -1,20 +1,20 @@
 # NTB Methane Tracker - GeoESG A.E.C.O
 
-Advanced real-time methane emission tracking and dispersion prediction system for **TPA Regional Kebon Kongok, Lombok Barat, NTB**.
+Advanced real-time methane emission tracking and dispersion prediction system for **West Nusa Tenggara (NTB)**.
 
 ## Tech Stack
 - **Backend:** Rust (Axum, Tokio, SQLx)
 - **Frontend:** HTML5, Leaflet.js, CartoDB Dark Matter
 - **Database:** PostgreSQL + PostGIS (Spatial Intelligence)
 - **Data Sources:** 
-  - **BMKG:** Real-time weather API (Wind & Temp).
+  - **BMKG:** Real-time weather API (Wind & Temp) across NTB stations.
   - **Carbon Mapper:** STAC API for high-resolution methane plume detection.
   - **Open-Meteo:** Secondary fallback for regional weather data.
 
 ## Key Features
 1. **Interactive Dashboard:**
-   - Real-time visualization of methane plumes on a dark-themed geographic map.
-   - Live prediction of gas dispersion footprints.
+   - Real-time visualization of methane plumes across the NTB region.
+   - Live prediction of gas dispersion footprints for multiple detection points.
 2. **Gaussian Plume Dispersion:**
    - Scientifically rigorous 1-hour dispersion modeling.
    - Uses Pasquill-Gifford Class D stability approximation to generate 2D polygon footprints.
