@@ -1,5 +1,7 @@
 use axum::{extract::State, response::Html, routing::get, Json, Router};
+use chrono::Timelike;
 use dotenvy::dotenv;
+use gdal::Dataset;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres};
 use std::sync::Arc;
@@ -9,6 +11,27 @@ use tower_http::cors::{Any, CorsLayer};
 
 mod models;
 use models::*;
+
+fn get_elevation_at_point(lon: f64, lat: f64) -> Option<f32> {
+    let dataset = Dataset::open("ntb_dem.tif").ok()?;
+    let gt = dataset.geo_transform().ok()?;
+    let band = dataset.rasterband(1).ok()?;
+
+    // lon = gt[0] + x * gt[1] + y * gt[2]
+    // lat = gt[3] + x * gt[4] + y * gt[5]
+    // Assuming north-up (gt[2] == 0, gt[4] == 0)
+    let inv_det = 1.0 / (gt[1] * gt[5] - gt[2] * gt[4]);
+    let x = (inv_det * (gt[5] * (lon - gt[0]) - gt[2] * (lat - gt[3]))) as isize;
+    let y = (inv_det * (-gt[4] * (lon - gt[0]) + gt[1] * (lat - gt[3]))) as isize;
+
+    let (size_x, size_y) = band.size();
+    if x < 0 || y < 0 || x >= size_x as isize || y >= size_y as isize {
+        return None;
+    }
+
+    let rv = band.read_as::<f32>((x, y), (1, 1), (1, 1), None).ok()?;
+    Some(rv.data()[0])
+}
 
 #[tokio::main]
 async fn main() {
@@ -110,51 +133,235 @@ async fn get_latest_methane(
     Json(records)
 }
 
+fn get_pasquill_stability_class(wind_speed_ms: f64, is_daytime: bool) -> char {
+    if is_daytime {
+        if wind_speed_ms < 3.0 {
+            'A'
+        } else if wind_speed_ms < 5.0 {
+            'B'
+        } else {
+            'C'
+        }
+    } else {
+        if wind_speed_ms < 3.0 {
+            'F'
+        } else if wind_speed_ms < 5.0 {
+            'E'
+        } else {
+            'D'
+        }
+    }
+}
+
+fn get_plume_spread_angle(stability_class: char) -> f64 {
+    match stability_class {
+        'A' => 25.0,
+        'B' => 20.0,
+        'C' => 15.0,
+        'D' => 12.5,
+        'E' => 8.75,
+        'F' => 5.0,
+        _ => 12.5,
+    }
+}
+
+fn get_region_from_coords(lon: f64, lat: f64) -> &'static str {
+    let zones = [
+        ("Lombok Barat", -8.6818, 116.1240),
+        ("Lombok Tengah", -8.7167, 116.2667),
+        ("Lombok Timur", -8.6500, 116.5333),
+        ("Sumbawa Barat", -8.7333, 116.8500),
+        ("Kota Bima", -8.4667, 118.7167),
+    ];
+
+    let mut nearest_region = "Lombok Barat";
+    let mut min_dist = f64::MAX;
+
+    for (name, z_lat, z_lon) in zones {
+        let dist = ((lat - z_lat).powi(2) + (lon - z_lon).powi(2)).sqrt();
+        if dist < min_dist {
+            min_dist = dist;
+            nearest_region = name;
+        }
+    }
+    nearest_region
+}
+
+async fn send_telegram_alert(msg: &str) {
+    let token = std::env::var("TELEGRAM_BOT_TOKEN").unwrap_or_default();
+    let chat_id = std::env::var("TELEGRAM_CHAT_ID").unwrap_or_default();
+    if token.is_empty() || chat_id.is_empty() {
+        error!("Telegram configuration missing (TOKEN/CHAT_ID)");
+        return;
+    }
+
+    let url = format!("https://api.telegram.org/bot{}/sendMessage", token);
+    let client = reqwest::Client::new();
+    let payload = serde_json::json!({
+        "chat_id": chat_id,
+        "text": msg,
+        "parse_mode": "HTML"
+    });
+
+    if let Err(e) = client.post(url).json(&payload).send().await {
+        error!("Failed to send Telegram alert: {}", e);
+    } else {
+        info!("Telegram alert sent successfully.");
+    }
+}
+
 async fn get_plume_prediction(
     State(pool): State<Arc<Pool<Postgres>>>,
 ) -> Json<Option<PlumePrediction>> {
+    // 1. Fetch latest source
+    let source = sqlx::query!(
+        r#"
+        SELECT 
+            ST_X(location::geometry) as lon, 
+            ST_Y(location::geometry) as lat,
+            emission_rate_kg_hr
+        FROM methane_observations 
+        ORDER BY recorded_at DESC LIMIT 1
+        "#
+    ).fetch_optional(&*pool).await.unwrap_or_default();
+
+    let source = match source {
+        Some(s) => s,
+        None => return Json(None),
+    };
+
+    let source_lon = source.lon.unwrap_or(0.0);
+    let source_lat = source.lat.unwrap_or(0.0);
+    let region = get_region_from_coords(source_lon, source_lat);
+
+    // 2. Fetch latest weather for the specific region
+    let weather = sqlx::query!(
+        r#"
+        SELECT wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c
+        FROM weather_observations 
+        WHERE area_id = $1 AND wind_speed_ms IS NOT NULL AND wind_direction_deg IS NOT NULL
+        ORDER BY recorded_at DESC LIMIT 1
+        "#,
+        region
+    ).fetch_optional(&*pool).await.unwrap_or_default();
+
+    let weather = match weather {
+        Some(w) => w,
+        None => return Json(None),
+    };
+
+    let emission_rate = source.emission_rate_kg_hr;
+    
+    // REGIME I: Instrument Detector Bound (Shot Noise)
+    if emission_rate < 10.0 {
+        info!("Signal-to-Noise Ratio too low ({} < 10.0 kg/hr). Shot noise bound reached.", emission_rate);
+        return Json(None);
+    }
+
+    let ws = weather.wind_speed_ms.unwrap_or(0.0);
+    let wd = weather.wind_direction_deg.unwrap_or(0.0);
+    let hum = weather.humidity_percent.unwrap_or(0.0);
+    let temp = weather.temperature_c.unwrap_or(0.0);
+
+    let mut distance = ws * 3600.0; // 1-hour travel distance
+
+    // REGIME II: Atmospheric Windows & Extinction
+    if hum > 85.0 {
+        info!("High atmospheric extinction (humidity {}% > 85%). Attenuating distance.", hum);
+        distance *= 0.60;
+    }
+
+    // Calculate Stability Class
+    let now_utc = chrono::Utc::now();
+    let hour_utc = now_utc.hour();
+    let is_daytime = hour_utc >= 22 || hour_utc < 10;
+    
+    let stability_class = get_pasquill_stability_class(ws, is_daytime);
+    let mut spread_angle = get_plume_spread_angle(stability_class);
+
+    // REGIME III: Thermal Emissivity Stretch
+    let temp_k = temp + 273.15;
+    let baseline_k = 308.15; // 35C
+    if temp_k > baseline_k {
+        let scale_factor = (baseline_k / temp_k).powi(4);
+        info!("High thermal background (temp {}K > {}K). Dynamic Boltzmann scaling: {}", temp_k, baseline_k, scale_factor);
+        spread_angle *= scale_factor;
+    }
+
+    // REGIME IV: Optomechanical Smear Limit
+    let sensor_roll = 7.0;
+    let sensor_pitch = 2.0;
+    let is_smeared = sensor_roll > 6.85 || sensor_pitch > 4.8;
+    if is_smeared {
+        tracing::warn!("Optomechanical smear detected (Roll: {}, Pitch: {}). MTF mismatch.", sensor_roll, sensor_pitch);
+    }
+
+    // 2. Terrain-Aware Blocking
+    let origin_elev = get_elevation_at_point(source_lon, source_lat).unwrap_or(0.0);
+    
+    for i in 1..=10 {
+        let step_dist = distance * (i as f64 / 10.0);
+        let dx = (wd + 180.0).to_radians().sin() * (step_dist / 111320.0);
+        let dy = (wd + 180.0).to_radians().cos() * (step_dist / 110540.0);
+        let check_lon = source_lon + dx;
+        let check_lat = source_lat + dy;
+        
+        if let Some(elev) = get_elevation_at_point(check_lon, check_lat) {
+             if elev > origin_elev + 15.0 {
+                 info!("Plume blocked by terrain at {}m elevation (distance: {}m)", elev, step_dist);
+                 distance = step_dist; 
+                 break;
+             }
+        }
+    }
+
+    // 3. Generate final dispersion polygon
     let record = sqlx::query_as!(
         PlumePrediction,
         r#"
-        WITH latest_weather AS (
-            SELECT wind_speed_ms, wind_direction_deg FROM weather_observations 
-            WHERE wind_speed_ms IS NOT NULL AND wind_direction_deg IS NOT NULL
-            ORDER BY recorded_at DESC LIMIT 1
-        ),
-        latest_methane AS (
-            SELECT location, emission_rate_kg_hr FROM methane_observations ORDER BY recorded_at DESC LIMIT 1
-        ),
-        plume_vars AS (
-            SELECT
-                m.emission_rate_kg_hr,
-                w.wind_speed_ms,
-                w.wind_direction_deg,
-                m.location::geography as origin,
-                (w.wind_speed_ms * 3600.0) as distance_1hr, -- x-axis (downwind distance in 1 hour)
-                radians(w.wind_direction_deg + 180.0) as blow_to_rad, -- wind direction vector
-                radians(12.5) as spread_rad -- y-axis spread (sigma_y equivalent for Class D stability)
-            FROM latest_methane m CROSS JOIN latest_weather w
+        WITH plume AS (
+            SELECT ST_MakePolygon(
+                ST_MakeLine(ARRAY[
+                    ST_SetSRID(ST_MakePoint($4::FLOAT8, $5::FLOAT8), 4326)::geometry,
+                    ST_Project(ST_SetSRID(ST_MakePoint($4::FLOAT8, $5::FLOAT8), 4326)::geography, $6::FLOAT8, radians($3::FLOAT8 + 180.0::FLOAT8 - $7::FLOAT8))::geometry,
+                    ST_Project(ST_SetSRID(ST_MakePoint($4::FLOAT8, $5::FLOAT8), 4326)::geography, $6::FLOAT8, radians($3::FLOAT8 + 180.0::FLOAT8 + $7::FLOAT8))::geometry,
+                    ST_SetSRID(ST_MakePoint($4::FLOAT8, $5::FLOAT8), 4326)::geometry
+                ])
+            ) as geom
         )
         SELECT
-            emission_rate_kg_hr,
-            wind_speed_ms as "wind_speed_ms!",
-            wind_direction_deg as "wind_direction_deg!",
-            ST_AsGeoJSON(
-                ST_MakePolygon(
-                    ST_MakeLine(ARRAY[
-                        origin::geometry,
-                        ST_Project(origin, distance_1hr, blow_to_rad - spread_rad)::geometry,
-                        ST_Project(origin, distance_1hr, blow_to_rad + spread_rad)::geometry,
-                        origin::geometry
-                    ])
-                )
-            ) as "plume_line_json!"
-        FROM plume_vars
-        "#
+            $1::FLOAT8 as "emission_rate_kg_hr!",
+            $2::FLOAT8 as "wind_speed_ms!",
+            $3::FLOAT8 as "wind_direction_deg!",
+            ST_AsGeoJSON(geom) as "plume_line_json!",
+            $8::BOOL as "high_uncertainty_smear!",
+            ST_Intersects(geom, ST_MakeEnvelope(116.10, -8.67, 116.13, -8.64, 4326)) as "exposure_alert!"
+        FROM plume
+        "#,
+        emission_rate,
+        ws,
+        wd,
+        source_lon,
+        source_lat,
+        distance,
+        spread_angle,
+        is_smeared
     )
-    .fetch_optional(&*pool)
+    .fetch_one(&*pool)
     .await
-    .unwrap_or_default();
+    .ok();
+
+    if let Some(ref p) = record {
+        if p.exposure_alert {
+            let msg = format!(
+                "⚠️ <b>EVACUATION ALERT: Toxic Plume Exposure</b>\n\n<b>Region:</b> {}\n<b>Emission:</b> {:.2} kg/hr\n<b>Wind:</b> {:.2} m/s @ {:.0}°",
+                region, p.emission_rate_kg_hr, p.wind_speed_ms, p.wind_direction_deg
+            );
+            tokio::spawn(async move {
+                send_telegram_alert(&msg).await;
+            });
+        }
+    }
      
     Json(record)
 }

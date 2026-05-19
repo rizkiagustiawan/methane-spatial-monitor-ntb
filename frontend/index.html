@@ -107,21 +107,20 @@
                     ? JSON.parse(data.plume_line_json) 
                     : data.plume_line_json;
 
-                L.geoJSON(geometry, {
-                    style: {
-                        color: "#ff3300",
-                        weight: 2,
-                        fillColor: "#ff3300",
-                        fillOpacity: 0.3,
-                        dashArray: "5, 5"
-                    }
-                }).addTo(map).bindPopup(`
-                    <div style="background: #222; color: #ff3300; font-family: monospace; padding: 5px; border: 1px solid #ff3300;">
-                        <strong>⚠️ PREDIKSI SEBARAN GAS</strong><br>
+                const style = data.exposure_alert 
+                    ? { color: 'red', weight: 4, fillColor: 'red', fillOpacity: 0.4, dashArray: '5, 10' }
+                    : { color: "#ff3300", weight: 2, fillColor: "#ff3300", fillOpacity: 0.3, dashArray: "5, 5" };
+
+                let popupContent = `
+                    <div style="background: #222; color: ${data.exposure_alert ? 'red' : '#ff3300'}; font-family: monospace; padding: 5px; border: 1px solid ${data.exposure_alert ? 'red' : '#ff3300'};">
+                        <strong>${data.exposure_alert ? '🚨 EVACUATION ALERT' : '⚠️ PREDIKSI SEBARAN GAS'}</strong><br>
                         Kecepatan Angin: ${data.wind_speed_ms.toFixed(2)} m/s<br>
-                        Arah Angin: ${data.wind_direction_deg}°
+                        Arah Angin: ${data.wind_direction_deg}°<br>
+                        ${data.high_uncertainty_smear ? '<span style="color: #ffaa00;">⚠️ Sat-Smear Limit Warning</span>' : ''}
                     </div>
-                `);
+                `;
+
+                L.geoJSON(geometry, { style: style }).addTo(map).bindPopup(popupContent);
 
                 console.log("Plume prediction loaded.");
             } catch (error) {

@@ -21,10 +21,15 @@ serde-xml-rs = "0.6" # High-level XML parsing
 quick-xml = { version = "0.31", features = ["serialize"] }
 
 # Networking & Scheduling
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 tokio-cron-scheduler = "0.10"
 dotenvy = "0.15"
 
 # Utility
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+gdal = { version = "0.19.0", features = ["bindgen"] }
+
+[patch.crates-io]
+gdal = { git = "https://github.com/georust/gdal", rev = "968cf34a" }
+gdal-sys = { git = "https://github.com/georust/gdal", rev = "968cf34a" }

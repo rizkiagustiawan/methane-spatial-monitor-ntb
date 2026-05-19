@@ -29,6 +29,8 @@ pub struct PlumePrediction {
     pub wind_speed_ms: f64,
     pub wind_direction_deg: f64,
     pub plume_line_json: String, // ST_AsGeoJSON representation of the LineString
+    pub high_uncertainty_smear: bool,
+    pub exposure_alert: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

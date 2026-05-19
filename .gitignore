@@ -1,14 +1,42 @@
-/target
-.env
-**/*.rs.bk
+# --- RUST ---
+/target/
 Cargo.lock
+**/*.rs.bk
 
-# AI Agent local tracking
+# --- ENVIRONMENT & SECRETS ---
+.env
+.env.local
+.env.*.local
+
+# --- DOCKER & DATABASE ---
+# Jangan pernah masukkan data database ke git
+/pgdata/
+/geoesg_data/
+# Database local export/temp files
+*.sql
+*.dump
+
+# --- SYSTEM & OS ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+*.bak
+*.tmp
+
+# --- AI AGENT TRACKING ---
 .agents/
 skills-lock.json
 
-# Large PDFs & Reference Materials
+# --- GEOSPATIAL & DOCUMENTS ---
+# File raster besar
+*.tif
+*.tiff
+*.jpg
+*.png
 *.pdf
 
-# Security
-.env
+# --- IDE & EDITOR ---
+.vscode/
+.idea/
+*.swp
+*.swo
