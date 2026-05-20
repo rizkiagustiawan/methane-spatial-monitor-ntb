@@ -1,0 +1,14 @@
+# Rust & Git
+target/
+.git/
+.gitignore
+
+# Database & Data Spasial
+pgdata/
+geoesg_data/
+*.tif
+*.tiff
+
+# Environment Secrets
+.env
+.env.*
