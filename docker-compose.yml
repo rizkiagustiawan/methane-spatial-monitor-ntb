@@ -5,9 +5,9 @@ services:
     image: postgis/postgis:15-3.3
     container_name: geoesg_db
     environment:
-      POSTGRES_USER: geo_admin
-      POSTGRES_PASSWORD: geo_secure_password
-      POSTGRES_DB: geoesg_aeco
+      POSTGRES_USER: ${POSTGRES_USER:-geo_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-geoesg_aeco}
     ports:
       - "5432:5432"
     volumes:

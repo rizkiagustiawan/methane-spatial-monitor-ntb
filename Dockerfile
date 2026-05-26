@@ -26,7 +26,6 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /usr/local/bin
 COPY --from=builder /usr/src/app/target/release/geoesg-aeco-backend .
 COPY --from=builder /usr/src/app/ntb_dem.tif .
-COPY --from=builder /usr/src/app/frontend ./frontend
 
 # Expose the API port
 EXPOSE 3000

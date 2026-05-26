@@ -41,10 +41,14 @@
             maxZoom: 20
         }).addTo(map);
 
+        // Layer groups for cleanup on refresh
+        let plumesLayer = null;
+        let predictionLayer = null;
+
         // Fetch Methane Plumes
         async function fetchPlumes() {
             try {
-                const response = await fetch('http://localhost:3000/api/methane/plumes');
+                const response = await fetch('/api/methane/plumes');
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.json();
 
@@ -61,8 +65,13 @@
                     }))
                 };
 
+                // Remove old layer before adding new one
+                if (plumesLayer) {
+                    map.removeLayer(plumesLayer);
+                }
+
                 // Add to map
-                L.geoJSON(geoJson, {
+                plumesLayer = L.geoJSON(geoJson, {
                     style: {
                         color: "#00ff00",
                         weight: 2,
@@ -98,7 +107,8 @@
 
         async function fetchPrediction() {
             try {
-                const response = await fetch('http://localhost:3000/api/plume-prediction');
+                const response = await fetch('/api/plume-prediction');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.json();
                 
                 if (!data || !data.plume_line_json) return;
@@ -113,14 +123,19 @@
 
                 let popupContent = `
                     <div style="background: #222; color: ${data.exposure_alert ? 'red' : '#ff3300'}; font-family: monospace; padding: 5px; border: 1px solid ${data.exposure_alert ? 'red' : '#ff3300'};">
-                        <strong>${data.exposure_alert ? '🚨 EVACUATION ALERT' : '⚠️ PREDIKSI SEBARAN GAS'}</strong><br>
+                        <strong>${data.exposure_alert ? 'EVACUATION ALERT' : 'PREDIKSI SEBARAN GAS'}</strong><br>
                         Kecepatan Angin: ${data.wind_speed_ms.toFixed(2)} m/s<br>
-                        Arah Angin: ${data.wind_direction_deg}°<br>
-                        ${data.high_uncertainty_smear ? '<span style="color: #ffaa00;">⚠️ Sat-Smear Limit Warning</span>' : ''}
+                        Arah Angin: ${data.wind_direction_deg}<br>
+                        ${data.high_uncertainty_smear ? '<span style="color: #ffaa00;">Sat-Smear Limit Warning</span>' : ''}
                     </div>
                 `;
 
-                L.geoJSON(geometry, { style: style }).addTo(map).bindPopup(popupContent);
+                // Remove old layer before adding new one
+                if (predictionLayer) {
+                    map.removeLayer(predictionLayer);
+                }
+
+                predictionLayer = L.geoJSON(geometry, { style: style }).addTo(map).bindPopup(popupContent);
 
                 console.log("Plume prediction loaded.");
             } catch (error) {
@@ -128,8 +143,13 @@
             }
         }
 
+        // Initial fetch
         fetchPlumes();
         fetchPrediction();
+
+        // Periodic refresh every 60 seconds for real-time updates
+        setInterval(fetchPlumes, 60000);
+        setInterval(fetchPrediction, 60000);
     </script>
 </body>
 </html>

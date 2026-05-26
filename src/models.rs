@@ -53,10 +53,12 @@ pub struct BmkgDataGroup {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct BmkgForecastItem {
+    #[allow(dead_code)]
     pub local_datetime: String,
     pub t: f64,
     pub hu: f64,
     pub ws: f64,
+    #[allow(dead_code)]
     pub wd: String,
     pub wd_deg: f64,
 }
