@@ -3,153 +3,181 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NTB Methane Tracker</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <title>NTB Methane Tracker Pro</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background: #111; }
+        body { margin: 0; padding: 0; overflow: hidden; background: #111; font-family: 'Courier New', monospace; color: #fff; }
         #map { height: 100vh; width: 100vw; }
+        
         .map-title {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            background: rgba(0,0,0,0.7);
-            color: #00ff00;
-            padding: 10px 20px;
-            border: 1px solid #00ff00;
-            font-family: 'Courier New', Courier, monospace;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            pointer-events: none;
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; background: rgba(0,0,0,0.8); color: #0f0;
+            padding: 10px 20px; border: 1px solid #0f0; letter-spacing: 2px;
         }
+
+        .alert-banner {
+            position: absolute; top: 70px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; background: rgba(255,0,0,0.9); color: white;
+            padding: 15px 30px; border: 2px solid #fff; font-weight: bold;
+            display: none; animation: blink 1s infinite;
+        }
+
+        @keyframes blink { 50% { opacity: 0.5; } }
+
+        .dashboard {
+            position: absolute; bottom: 20px; left: 20px; z-index: 1000;
+            background: rgba(0,0,0,0.8); border: 1px solid #0f0; padding: 15px;
+            width: 250px;
+        }
+
+        .dashboard h3 { margin: 0 0 10px 0; color: #0f0; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px; }
+        .stat-val { color: #0f0; font-weight: bold; }
+
+        .legend {
+            position: absolute; bottom: 20px; right: 20px; z-index: 1000;
+            background: rgba(0,0,0,0.8); border: 1px solid #555; padding: 15px;
+        }
+        .legend-item { display: flex; align-items: center; margin-bottom: 5px; font-size: 13px; }
+        .legend-color { width: 15px; height: 15px; margin-right: 10px; border: 1px solid #fff; }
     </style>
 </head>
 <body>
-    <div class="map-title">NTB Methane Tracker - Real-time Plumes</div>
+    <div class="map-title">NTB METHANE TRACKER</div>
+    <div id="alertBanner" class="alert-banner">🚨 EVACUATION ALERT: TOXIC PLUME DETECTED 🚨</div>
+    
+    <div class="dashboard">
+        <h3>SYSTEM STATS</h3>
+        <div class="stat-row"><span>Status:</span> <span id="sysStatus" class="stat-val">Loading...</span></div>
+        <div class="stat-row"><span>Active Plumes:</span> <span id="statPlumes" class="stat-val">-</span></div>
+        <div class="stat-row"><span>Max Emission:</span> <span id="statMax" class="stat-val">-</span></div>
+        <div class="stat-row"><span>Active Alerts:</span> <span id="statAlerts" class="stat-val" style="color:red">-</span></div>
+        <div class="stat-row"><span>Weather Node:</span> <span id="statWeather" class="stat-val">-</span></div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item"><div class="legend-color" style="background:#0f0; border-radius:50%"></div> Methane Plume Source</div>
+        <div class="legend-item"><div class="legend-color" style="background:rgba(255,165,0,0.4)"></div> Gaussian Dispersion</div>
+        <div class="legend-item"><div class="legend-color" style="background:rgba(255,0,0,0.5)"></div> Evacuation Zone Alert</div>
+        <div class="legend-item"><div class="legend-color" style="background:rgba(100,100,255,0.2)"></div> Populated Zone</div>
+    </div>
+
     <div id="map"></div>
 
     <script>
-        // Initialize map centered on NTB
-        const map = L.map('map').setView([-8.65, 116.12], 8);
+        const map = L.map('map').setView([-8.65, 116.12], 9);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 20 }).addTo(map);
 
-        // Dark Matter Basemap
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 20
-        }).addTo(map);
+        let plumesLayer = L.layerGroup().addTo(map);
+        let predictionLayer = L.layerGroup().addTo(map);
+        let zonesLayer = L.layerGroup().addTo(map);
 
-        // Layer groups for cleanup on refresh
-        let plumesLayer = null;
-        let predictionLayer = null;
+        L.control.layers(null, {
+            "Methane Sources": plumesLayer,
+            "Plume Predictions": predictionLayer,
+            "Populated Zones": zonesLayer
+        }, { position: 'topright' }).addTo(map);
 
-        // Fetch Methane Plumes
-        async function fetchPlumes() {
+        async function fetchHealth() {
             try {
-                const response = await fetch('/api/methane/plumes');
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                const data = await response.json();
-
-                // Convert array to GeoJSON FeatureCollection
-                const geoJson = {
-                    type: "FeatureCollection",
-                    features: data.map(plume => ({
-                        type: "Feature",
-                        geometry: plume.geometry,
-                        properties: {
-                            recorded_at: plume.recorded_at,
-                            emission_rate: plume.emission_rate_kg_hr
-                        }
-                    }))
-                };
-
-                // Remove old layer before adding new one
-                if (plumesLayer) {
-                    map.removeLayer(plumesLayer);
-                }
-
-                // Add to map
-                plumesLayer = L.geoJSON(geoJson, {
-                    style: {
-                        color: "#00ff00",
-                        weight: 2,
-                        opacity: 0.6,
-                        fillOpacity: 0.3
-                    },
-                    pointToLayer: function (feature, latlng) {
-                        return L.circleMarker(latlng, {
-                            radius: 8,
-                            fillColor: "#00ff00",
-                            color: "#000",
-                            weight: 1,
-                            opacity: 1,
-                            fillOpacity: 0.8
-                        });
-                    },
-                    onEachFeature: function (feature, layer) {
-                        layer.bindPopup(`
-                            <div style="background: #222; color: #00ff00; font-family: monospace; padding: 5px;">
-                                <strong>METHANE PLUME</strong><br>
-                                Emission: ${feature.properties.emission_rate.toFixed(2)} kg/hr<br>
-                                Recorded: ${new Date(feature.properties.recorded_at).toLocaleString()}
-                            </div>
-                        `);
-                    }
-                }).addTo(map);
-
-                console.log(`Loaded ${data.length} plumes.`);
-            } catch (error) {
-                console.error('Error fetching plumes:', error);
-            }
+                const res = await fetch('/health');
+                const data = await res.json();
+                document.getElementById('sysStatus').innerText = data.status;
+                document.getElementById('sysStatus').style.color = data.status === 'HEALTHY' ? '#0f0' : 'red';
+            } catch (e) {}
         }
 
-        async function fetchPrediction() {
+        async function fetchZones() {
             try {
-                const response = await fetch('/api/plume-prediction');
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                const data = await response.json();
+                const res = await fetch('/api/zones');
+                const data = await res.json();
+                zonesLayer.clearLayers();
+                L.geoJSON(data, {
+                    style: function(f) {
+                        return { color: f.properties.is_volcanic_zone ? '#ff00ff' : '#6464ff', weight: 1, fillOpacity: 0.1 };
+                    },
+                    onEachFeature: (f, l) => l.bindPopup(`${f.properties.name} (${f.properties.type})`)
+                }).addTo(zonesLayer);
+            } catch (e) {}
+        }
+
+        async function fetchData() {
+            try {
+                const [plumesRes, predRes] = await Promise.all([
+                    fetch('/api/methane/plumes'),
+                    fetch('/api/plume-prediction')
+                ]);
                 
-                if (!data || !data.plume_line_json) return;
+                const plumes = await plumesRes.json();
+                const predictions = await predRes.json();
 
-                const geometry = typeof data.plume_line_json === 'string' 
-                    ? JSON.parse(data.plume_line_json) 
-                    : data.plume_line_json;
+                plumesLayer.clearLayers();
+                predictionLayer.clearLayers();
 
-                const style = data.exposure_alert 
-                    ? { color: 'red', weight: 4, fillColor: 'red', fillOpacity: 0.4, dashArray: '5, 10' }
-                    : { color: "#ff3300", weight: 2, fillColor: "#ff3300", fillOpacity: 0.3, dashArray: "5, 5" };
+                let activeAlerts = 0;
+                let maxEmission = 0;
 
-                let popupContent = `
-                    <div style="background: #222; color: ${data.exposure_alert ? 'red' : '#ff3300'}; font-family: monospace; padding: 5px; border: 1px solid ${data.exposure_alert ? 'red' : '#ff3300'};">
-                        <strong>${data.exposure_alert ? 'EVACUATION ALERT' : 'PREDIKSI SEBARAN GAS'}</strong><br>
-                        Kecepatan Angin: ${data.wind_speed_ms.toFixed(2)} m/s<br>
-                        Arah Angin: ${data.wind_direction_deg}<br>
-                        ${data.high_uncertainty_smear ? '<span style="color: #ffaa00;">Sat-Smear Limit Warning</span>' : ''}
-                    </div>
-                `;
+                // Render Predictions (Multi-plume)
+                if (predictions && predictions.length > 0) {
+                    predictions.forEach(p => {
+                        maxEmission = Math.max(maxEmission, p.emission_rate_kg_hr);
+                        if (p.exposure_alert) activeAlerts++;
 
-                // Remove old layer before adding new one
-                if (predictionLayer) {
-                    map.removeLayer(predictionLayer);
+                        const style = p.exposure_alert 
+                            ? { color: 'red', weight: 3, fillColor: 'red', fillOpacity: 0.5, dashArray: '5,5' }
+                            : { color: 'orange', weight: 2, fillColor: 'orange', fillOpacity: 0.3 };
+
+                        const content = `
+                            <div style="background:#222; color:${p.exposure_alert?'red':'orange'}; padding:5px;">
+                                <b>${p.exposure_alert ? '🚨 ALERT' : 'PREDICTION'}</b><br>
+                                Rate: ${p.emission_rate_kg_hr.toFixed(1)} kg/hr<br>
+                                Wind: ${p.wind_speed_ms.toFixed(1)} m/s @ ${p.wind_direction_deg}°<br>
+                                Class: ${p.stability_class}<br>
+                                Conc @ 1km: ${p.concentration_at_1km_ppm.toFixed(2)} ppm<br>
+                                Terrain Block: ${p.terrain_blocked ? `Yes (${p.terrain_block_distance_m.toFixed(0)}m)` : 'No'}
+                            </div>`;
+
+                        L.geoJSON(p.plume_geojson, { style }).bindPopup(content).addTo(predictionLayer);
+                    });
                 }
 
-                predictionLayer = L.geoJSON(geometry, { style: style }).addTo(map).bindPopup(popupContent);
+                // Render Sources
+                if (plumes && plumes.length > 0) {
+                    const geoJson = {
+                        type: "FeatureCollection",
+                        features: plumes.map(p => ({
+                            type: "Feature", geometry: p.geometry,
+                            properties: { rate: p.emission_rate_kg_hr, time: p.recorded_at }
+                        }))
+                    };
+                    L.geoJSON(geoJson, {
+                        pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 6, color: '#000', fillColor: '#0f0', fillOpacity: 1 }),
+                        onEachFeature: (f, l) => l.bindPopup(`Source: ${f.properties.rate.toFixed(1)} kg/hr`)
+                    }).addTo(plumesLayer);
+                }
 
-                console.log("Plume prediction loaded.");
-            } catch (error) {
-                console.error('Error fetching prediction:', error);
-            }
+                // Update Dashboard
+                document.getElementById('statPlumes').innerText = plumes.length || 0;
+                document.getElementById('statMax').innerText = maxEmission > 0 ? `${maxEmission.toFixed(1)} kg/hr` : '-';
+                document.getElementById('statAlerts').innerText = activeAlerts;
+                
+                const banner = document.getElementById('alertBanner');
+                banner.style.display = activeAlerts > 0 ? 'block' : 'none';
+
+                // Fetch Weather info for dash
+                fetch('/api/weather').then(r => r.json()).then(w => {
+                    if (w && w.length > 0) document.getElementById('statWeather').innerText = w[0].data_source;
+                });
+
+            } catch (error) { console.error('Fetch error:', error); }
         }
 
-        // Initial fetch
-        fetchPlumes();
-        fetchPrediction();
-
-        // Periodic refresh every 60 seconds for real-time updates
-        setInterval(fetchPlumes, 60000);
-        setInterval(fetchPrediction, 60000);
+        fetchHealth();
+        fetchZones();
+        fetchData();
+        setInterval(fetchData, 60000); // 60s poll
+        setInterval(fetchHealth, 60000);
     </script>
 </body>
 </html>
