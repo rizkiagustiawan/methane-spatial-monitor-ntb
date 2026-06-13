@@ -23,11 +23,18 @@ mod models;
 mod errors;
 mod stac;
 mod ws;
+mod physics;
+mod config;
+mod repositories;
+mod services;
 
 use models::*;
 use errors::AppError;
 use stac::{StacCollection, StacItem, StacLink, StacSearchRequest, StacSearchResponse, STAC_VERSION, StacSearchContext};
 use ws::WsState;
+use physics::*;
+use config::AppConfig;
+use services::*;
 
 // ─── STATE & UTILS ───────────────────────────────────────────────────────────
 
