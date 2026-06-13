@@ -58,7 +58,8 @@
 
     <div class="legend">
         <div class="legend-item"><div class="legend-color" style="background:#0f0; border-radius:50%"></div> Methane Plume Source</div>
-        <div class="legend-item"><div class="legend-color" style="background:rgba(255,165,0,0.4)"></div> Gaussian Dispersion</div>
+        <div class="legend-item"><div class="legend-color" style="background:rgba(0,255,0,0.3)"></div> Observed Plume Footprint</div>
+        <div class="legend-item"><div class="legend-color" style="background:rgba(255,165,0,0.3)"></div> Forecasted Dispersion</div>
         <div class="legend-item"><div class="legend-color" style="background:rgba(255,0,0,0.5)"></div> Evacuation Zone Alert</div>
         <div class="legend-item"><div class="legend-color" style="background:rgba(100,100,255,0.2)"></div> Populated Zone</div>
     </div>
@@ -70,12 +71,14 @@
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 20 }).addTo(map);
 
         let plumesLayer = L.layerGroup().addTo(map);
-        let predictionLayer = L.layerGroup().addTo(map);
+        let observedLayer = L.layerGroup().addTo(map);
+        let forecastLayer = L.layerGroup().addTo(map);
         let zonesLayer = L.layerGroup().addTo(map);
 
         L.control.layers(null, {
             "Methane Sources": plumesLayer,
-            "Plume Predictions": predictionLayer,
+            "Observed Plumes": observedLayer,
+            "Forecast Plumes": forecastLayer,
             "Populated Zones": zonesLayer
         }, { position: 'topright' }).addTo(map);
 
@@ -104,41 +107,71 @@
 
         async function fetchData() {
             try {
-                const [plumesRes, predRes] = await Promise.all([
+                const [plumesRes, analysisRes] = await Promise.all([
                     fetch('/api/methane/plumes'),
-                    fetch('/api/plume-prediction')
+                    fetch('/api/plume-analysis')
                 ]);
                 
                 const plumes = await plumesRes.json();
-                const predictions = await predRes.json();
+                const analyses = await analysisRes.json();
 
                 plumesLayer.clearLayers();
-                predictionLayer.clearLayers();
+                observedLayer.clearLayers();
+                forecastLayer.clearLayers();
 
                 let activeAlerts = 0;
                 let maxEmission = 0;
 
-                // Render Predictions (Multi-plume)
-                if (predictions && predictions.length > 0) {
-                    predictions.forEach(p => {
-                        maxEmission = Math.max(maxEmission, p.emission_rate_kg_hr);
-                        if (p.exposure_alert) activeAlerts++;
+                // Render Plume Analysis (Observed + Forecast)
+                if (analyses && analyses.length > 0) {
+                    analyses.forEach(a => {
+                        maxEmission = Math.max(maxEmission, a.emission_rate_kg_hr);
 
-                        const style = p.exposure_alert 
-                            ? { color: 'red', weight: 3, fillColor: 'red', fillOpacity: 0.5, dashArray: '5,5' }
-                            : { color: 'orange', weight: 2, fillColor: 'orange', fillOpacity: 0.3 };
+                        // Render Observed Plume Footprint
+                        if (a.observed && a.observed.plume_footprint) {
+                            if (a.observed.exposure_alert) activeAlerts++;
+                            
+                            const style = a.observed.exposure_alert
+                                ? { color: '#ff0000', weight: 3, fillColor: '#ff0000', fillOpacity: 0.4, dashArray: '10,5' }
+                                : { color: '#00ff00', weight: 2, fillColor: '#00ff00', fillOpacity: 0.2 };
 
-                        const content = `
-                            <div style="background:#222; color:${p.exposure_alert?'red':'orange'}; padding:5px;">
-                                <b>${p.exposure_alert ? '🚨 ALERT' : 'PREDICTION'}</b><br>
-                                Rate: ${p.emission_rate_kg_hr.toFixed(1)} kg/hr<br>
-                                Wind: ${p.wind_speed_ms.toFixed(1)} m/s @ ${p.wind_direction_deg}°<br>
-                                Class: ${p.stability_class}<br>
-                                Conc @ 1km: ${p.concentration_at_1km_ppm.toFixed(2)} ppm<br>
-                                Terrain Block: ${p.terrain_blocked ? `Yes (${p.terrain_block_distance_m.toFixed(0)}m)` : 'No'}
-                            </div>`;
+                            const zones = a.observed.affected_zones.map(z => z.zone_name).join(', ') || 'None';
+                            const content = `
+                                <div style="background:#222; color:${a.observed.exposure_alert?'#ff0000':'#00ff00'}; padding:5px;">
+                                    <b>OBSERVED PLUME</b><br>
+                                    Source: ${a.observed.source}<br>
+                                    Rate: ${a.emission_rate_kg_hr.toFixed(1)} kg/hr<br>
+                                    Time: ${new Date(a.recorded_at).toLocaleString()}<br>
+                                    Affected Zones: ${zones}
+                                </div>`;
 
-                        L.geoJSON(p.plume_geojson, { style }).bindPopup(content).addTo(predictionLayer);
+                            L.geoJSON(a.observed.plume_footprint, { style }).bindPopup(content).addTo(observedLayer);
+                        }
+
+                        // Render Forecasted Plumes
+                        if (a.forecast && a.forecast.length > 0) {
+                            a.forecast.forEach((fc, idx) => {
+                                if (fc.exposure_alert) activeAlerts++;
+
+                                const style = fc.exposure_alert
+                                    ? { color: 'red', weight: 2, fillColor: 'red', fillOpacity: 0.3, dashArray: '5,5' }
+                                    : { color: 'orange', weight: 1, fillColor: 'orange', fillOpacity: 0.15 };
+
+                                const zones = fc.affected_zones.map(z => z.zone_name).join(', ') || 'None';
+                                const content = `
+                                    <div style="background:#222; color:${fc.exposure_alert?'red':'orange'}; padding:5px;">
+                                        <b>FORECAST #${idx + 1}</b><br>
+                                        Valid: ${new Date(fc.valid_at).toLocaleString()}<br>
+                                        Wind: ${fc.wind_speed_ms.toFixed(1)} m/s @ ${fc.wind_direction_deg}°<br>
+                                        Class: ${fc.stability_class}<br>
+                                        Conc @ 1km: ${fc.concentration_at_1km_ppm.toFixed(2)} ppm<br>
+                                        Terrain Block: ${fc.terrain_blocked ? `Yes (${fc.terrain_block_distance_m.toFixed(0)}m)` : 'No'}<br>
+                                        Affected Zones: ${zones}
+                                    </div>`;
+
+                                L.geoJSON(fc.plume_geojson, { style }).bindPopup(content).addTo(forecastLayer);
+                            });
+                        }
                     });
                 }
 
@@ -148,12 +181,12 @@
                         type: "FeatureCollection",
                         features: plumes.map(p => ({
                             type: "Feature", geometry: p.geometry,
-                            properties: { rate: p.emission_rate_kg_hr, time: p.recorded_at }
+                            properties: { rate: p.emission_rate_kg_hr, time: p.recorded_at, source: p.source || 'unknown' }
                         }))
                     };
                     L.geoJSON(geoJson, {
                         pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 6, color: '#000', fillColor: '#0f0', fillOpacity: 1 }),
-                        onEachFeature: (f, l) => l.bindPopup(`Source: ${f.properties.rate.toFixed(1)} kg/hr`)
+                        onEachFeature: (f, l) => l.bindPopup(`Source: ${f.properties.source}<br>Rate: ${f.properties.rate.toFixed(1)} kg/hr<br>Time: ${new Date(f.properties.time).toLocaleString()}`)
                     }).addTo(plumesLayer);
                 }
 

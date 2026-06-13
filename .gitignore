@@ -1,6 +1,5 @@
 # --- RUST ---
 /target/
-Cargo.lock
 **/*.rs.bk
 
 # --- ENVIRONMENT & SECRETS ---
@@ -13,7 +12,6 @@ Cargo.lock
 /pgdata/
 /geoesg_data/
 # Database local export/temp files
-*.sql
 *.dump
 
 # --- SYSTEM & OS ---
@@ -28,15 +26,37 @@ ehthumbs.db
 skills-lock.json
 
 # --- GEOSPATIAL & DOCUMENTS ---
-# File raster besar
-*.tif
+# File raster besar (kecuali yang dibutuhkan)
+# *.tif  # Uncomment jika tidak ingin track DEM file
 *.tiff
-*.jpg
-*.png
-*.pdf
 
 # --- IDE & EDITOR ---
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+
+# --- BUILD ARTIFACTS ---
+*.exe
+*.dll
+*.so
+*.dylib
+*.pdb
+
+# --- COVERAGE ---
+*.profraw
+*.profdata
+lcov.info
+coverage/
+
+# --- DOCKER ---
+docker-compose.override.yml
+
+# --- LOGS ---
+*.log
+logs/
+
+# --- CACHE ---
+.cache/
+*.cache

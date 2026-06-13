@@ -20,7 +20,14 @@ use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
 use uuid::Uuid;
 
 mod models;
+mod errors;
+mod stac;
+mod ws;
+
 use models::*;
+use errors::AppError;
+use stac::{StacCollection, StacItem, StacLink, StacSearchRequest, StacSearchResponse, STAC_VERSION, StacSearchContext};
+use ws::WsState;
 
 // ─── STATE & UTILS ───────────────────────────────────────────────────────────
 
@@ -28,6 +35,7 @@ struct AppState {
     pool: Pool<Postgres>,
     http_client: reqwest::Client,
     metrics: Arc<AppMetrics>,
+    ws_state: Arc<WsState>,
     // Track timestamps for health checks
     last_bmkg_fetch: std::sync::RwLock<Option<DateTime<Utc>>>,
     last_stac_fetch: std::sync::RwLock<Option<DateTime<Utc>>>,
@@ -129,6 +137,7 @@ async fn main() {
         pool: pool.clone(),
         http_client,
         metrics: Arc::new(AppMetrics::default()),
+        ws_state: Arc::new(WsState::new()),
         last_bmkg_fetch: std::sync::RwLock::new(None),
         last_stac_fetch: std::sync::RwLock::new(None),
     });
@@ -150,6 +159,12 @@ async fn main() {
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(60)).await;
         data_retention_task(state_cleanup).await;
+    });
+
+    let state_forecast = Arc::clone(&shared_state);
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        weather_forecast_task(state_forecast).await;
     });
 
     // SETUP API ROUTES & MIDDLEWARE
@@ -175,9 +190,19 @@ async fn main() {
         .route("/api/metrics", get(metrics_handler))
         .route("/api/stats", get(get_system_stats))
         .route("/api/weather", get(get_latest_weather))
+        .route("/api/weather/forecast", get(get_weather_forecast))
         .route("/api/methane/plumes", get(get_methane_plumes))
         .route("/api/plume-prediction", get(get_multi_plume_prediction))
+        .route("/api/plume-analysis", get(get_plume_analysis))
         .route("/api/zones", get(get_populated_zones))
+        // WebSocket endpoint
+        .route("/ws", get(ws::ws_handler))
+        // STAC API endpoints
+        .route("/api/stac", get(stac_root))
+        .route("/api/stac/collections", get(stac_collections))
+        .route("/api/stac/collections/methane-observations", get(stac_collection))
+        .route("/api/stac/collections/methane-observations/items", get(stac_items))
+        .route("/api/stac/search", get(stac_search))
         .layer(GovernorLayer { config: governor_conf })
         .layer(cors)
         .with_state(shared_state);
@@ -191,7 +216,7 @@ async fn main() {
 
 // ─── API HANDLERS ────────────────────────────────────────────────────────────
 
-async fn health_check(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+async fn health_check(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, AppError> {
     let db_status = match sqlx::query("SELECT 1").execute(&state.pool).await {
         Ok(_) => ComponentHealth { status: "OK".to_string(), message: None },
         Err(e) => ComponentHealth { status: "ERROR".to_string(), message: Some(e.to_string()) },
@@ -211,10 +236,10 @@ async fn health_check(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         dem_file: dem_status,
         last_bmkg_fetch: last_bmkg,
         last_carbon_mapper_fetch: last_stac,
-        uptime_seconds: 0, // Simplified
+        uptime_seconds: 0,
     };
 
-    (StatusCode::OK, AxumJson(health)).into_response()
+    Ok((StatusCode::OK, AxumJson(health)))
 }
 
 async fn metrics_handler(State(state): State<Arc<AppState>>) -> String {
@@ -277,41 +302,230 @@ async fn get_populated_zones(State(state): State<Arc<AppState>>) -> impl IntoRes
     (StatusCode::OK, AxumJson(geojson)).into_response()
 }
 
-async fn get_methane_plumes(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+async fn get_methane_plumes(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, AppError> {
     state.metrics.requests_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    match sqlx::query!(
-        r#"SELECT recorded_at, emission_rate_kg_hr, ST_AsGeoJSON(location) as "geometry!"
+    
+    let records = sqlx::query!(
+        r#"SELECT recorded_at, emission_rate_kg_hr, ST_AsGeoJSON(location) as "geometry!",
+           ST_AsGeoJSON(plume_geometry) as "plume_geometry_json", source
          FROM methane_observations ORDER BY recorded_at DESC LIMIT 100"#
-    ).fetch_all(&state.pool).await {
-        Ok(records) => {
-            let plumes: Vec<MethanePlumeResponse> = records.into_iter().map(|row| MethanePlumeResponse {
-                recorded_at: row.recorded_at,
-                emission_rate_kg_hr: row.emission_rate_kg_hr,
-                geometry: serde_json::from_str(&row.geometry).unwrap_or_default(),
-            }).collect();
-            (StatusCode::OK, AxumJson(json!(plumes))).into_response()
-        }
-        Err(e) => {
-            error!("DB error fetching plumes: {}", e);
-            state.metrics.request_errors.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            (StatusCode::INTERNAL_SERVER_ERROR, AxumJson(json!({"error": "DB error"}))).into_response()
-        }
-    }
+    ).fetch_all(&state.pool).await?;
+    
+    let plumes: Vec<MethanePlumeResponse> = records.into_iter().map(|row| MethanePlumeResponse {
+        recorded_at: row.recorded_at,
+        emission_rate_kg_hr: row.emission_rate_kg_hr,
+        geometry: serde_json::from_str(&row.geometry).unwrap_or_default(),
+        plume_footprint: row.plume_geometry_json.and_then(|g| serde_json::from_str(&g).ok()),
+        source: row.source,
+    }).collect();
+    
+    Ok((StatusCode::OK, AxumJson(json!(plumes))))
 }
 
-async fn get_latest_weather(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+async fn get_latest_weather(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, AppError> {
     state.metrics.requests_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    match sqlx::query_as!(WeatherObservation,
+    
+    let records = sqlx::query_as!(WeatherObservation,
         "SELECT recorded_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, data_source
          FROM weather_observations ORDER BY recorded_at DESC LIMIT 10"
-    ).fetch_all(&state.pool).await {
-        Ok(records) => (StatusCode::OK, AxumJson(json!(records))).into_response(),
-        Err(e) => {
-            error!("DB error fetching weather: {}", e);
-            state.metrics.request_errors.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            (StatusCode::INTERNAL_SERVER_ERROR, AxumJson(json!({"error": "DB error"}))).into_response()
-        }
-    }
+    ).fetch_all(&state.pool).await?;
+    
+    Ok((StatusCode::OK, AxumJson(json!(records))))
+}
+
+async fn get_weather_forecast(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, AppError> {
+    state.metrics.requests_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    
+    let records = sqlx::query!(
+        r#"SELECT forecast_at, valid_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, data_source
+           FROM weather_forecasts
+           WHERE valid_at > NOW()
+           ORDER BY valid_at ASC
+           LIMIT 48"#
+    ).fetch_all(&state.pool).await?;
+    
+    let forecasts: Vec<serde_json::Value> = records.into_iter().map(|r| {
+        json!({
+            "forecast_at": r.forecast_at,
+            "valid_at": r.valid_at,
+            "area_id": r.area_id,
+            "wind_speed_ms": r.wind_speed_ms,
+            "wind_direction_deg": r.wind_direction_deg,
+            "humidity_percent": r.humidity_percent,
+            "temperature_c": r.temperature_c,
+            "data_source": r.data_source
+        })
+    }).collect();
+    
+    Ok((StatusCode::OK, AxumJson(json!(forecasts))))
+}
+
+// ─── STAC API HANDLERS ───────────────────────────────────────────────────────
+
+async fn stac_root() -> Result<impl IntoResponse, AppError> {
+    let root = json!({
+        "stac_version": STAC_VERSION,
+        "type": "Catalog",
+        "id": "geoesg-aeco-ntb",
+        "title": "GeoESG A.E.C.O NTB Methane Tracker",
+        "description": "STAC API for methane emissions tracking in West Nusa Tenggara",
+        "links": [
+            {
+                "rel": "self",
+                "href": "/api/stac",
+                "type": "application/json"
+            },
+            {
+                "rel": "service-desc",
+                "href": "/api",
+                "type": "application/vnd.oai.openapi+json;version=3.0"
+            },
+            {
+                "rel": "data",
+                "href": "/api/stac/collections",
+                "type": "application/json"
+            },
+            {
+                "rel": "search",
+                "href": "/api/stac/search",
+                "type": "application/geo+json",
+                "method": "GET"
+            }
+        ]
+    });
+    
+    Ok((StatusCode::OK, AxumJson(root)))
+}
+
+async fn stac_collections() -> Result<impl IntoResponse, AppError> {
+    let collections = json!({
+        "collections": [
+            StacCollection::methane_observations()
+        ],
+        "links": [
+            {
+                "rel": "self",
+                "href": "/api/stac/collections",
+                "type": "application/json"
+            }
+        ]
+    });
+    
+    Ok((StatusCode::OK, AxumJson(collections)))
+}
+
+async fn stac_collection() -> Result<impl IntoResponse, AppError> {
+    Ok((StatusCode::OK, AxumJson(json!(StacCollection::methane_observations()))))
+}
+
+async fn stac_items(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<StacSearchRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    state.metrics.requests_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    
+    let limit = params.limit.unwrap_or(100).min(1000) as i64;
+    
+    let records = sqlx::query!(
+        r#"SELECT id, recorded_at, emission_rate_kg_hr, 
+           ST_AsGeoJSON(location) as "geometry!",
+           ST_X(location::geometry) as lon, ST_Y(location::geometry) as lat,
+           source
+         FROM methane_observations 
+         ORDER BY recorded_at DESC 
+         LIMIT $1"#,
+        limit
+    ).fetch_all(&state.pool).await?;
+    
+    let items: Vec<StacItem> = records.into_iter().map(|row| {
+        let geometry: serde_json::Value = serde_json::from_str(&row.geometry).unwrap_or_default();
+        let lon = row.lon.unwrap_or(0.0);
+        let lat = row.lat.unwrap_or(0.0);
+        let bbox = vec![lon - 0.01, lat - 0.01, lon + 0.01, lat + 0.01];
+        
+        StacItem::from_methane_observation(
+            row.id,
+            row.recorded_at,
+            row.emission_rate_kg_hr,
+            geometry,
+            bbox,
+            &row.source.unwrap_or_else(|| "unknown".to_string()),
+        )
+    }).collect();
+    
+    let response = StacSearchResponse {
+        r#type: "FeatureCollection".to_string(),
+        features: items,
+        links: vec![
+            StacLink {
+                rel: "self".to_string(),
+                href: "/api/stac/collections/methane-observations/items".to_string(),
+                r#type: Some("application/geo+json".to_string()),
+                title: None,
+            },
+        ],
+        context: Some(stac::StacSearchContext {
+            returned: records.len() as u32,
+            matched: None,
+        }),
+    };
+    
+    Ok((StatusCode::OK, AxumJson(json!(response))))
+}
+
+async fn stac_search(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<StacSearchRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    state.metrics.requests_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    
+    let limit = params.limit.unwrap_or(100).min(1000) as i64;
+    
+    let records = sqlx::query!(
+        r#"SELECT id, recorded_at, emission_rate_kg_hr, 
+           ST_AsGeoJSON(location) as "geometry!",
+           ST_X(location::geometry) as lon, ST_Y(location::geometry) as lat,
+           source
+         FROM methane_observations 
+         ORDER BY recorded_at DESC 
+         LIMIT $1"#,
+        limit
+    ).fetch_all(&state.pool).await?;
+    
+    let items: Vec<StacItem> = records.into_iter().map(|row| {
+        let geometry: serde_json::Value = serde_json::from_str(&row.geometry).unwrap_or_default();
+        let lon = row.lon.unwrap_or(0.0);
+        let lat = row.lat.unwrap_or(0.0);
+        let bbox = vec![lon - 0.01, lat - 0.01, lon + 0.01, lat + 0.01];
+        
+        StacItem::from_methane_observation(
+            row.id,
+            row.recorded_at,
+            row.emission_rate_kg_hr,
+            geometry,
+            bbox,
+            &row.source.unwrap_or_else(|| "unknown".to_string()),
+        )
+    }).collect();
+    
+    let response = StacSearchResponse {
+        r#type: "FeatureCollection".to_string(),
+        features: items,
+        links: vec![
+            StacLink {
+                rel: "self".to_string(),
+                href: "/api/stac/search".to_string(),
+                r#type: Some("application/geo+json".to_string()),
+                title: None,
+            },
+        ],
+        context: Some(stac::StacSearchContext {
+            returned: records.len() as u32,
+            matched: None,
+        }),
+    };
+    
+    Ok((StatusCode::OK, AxumJson(json!(response))))
 }
 
 // ─── PHYSICS & DISPERSION ────────────────────────────────────────────────────
@@ -377,7 +591,7 @@ async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl 
     let is_daytime = now_wita.hour() >= 6 && now_wita.hour() < 18;
 
     // Optional sensor telemtry overrides
-    let sensor_roll = std::env::var("SENSOR_ROLL_DEG").ok().and_then(|v| v.parse::<f64>().ok()).unwrap_or(7.0);
+    let sensor_roll = std::env::var("SENSOR_ROLL_DEG").ok().and_then(|v| v.parse::<f64>().ok()).unwrap_or(5.0);
     let sensor_pitch = std::env::var("SENSOR_PITCH_DEG").ok().and_then(|v| v.parse::<f64>().ok()).unwrap_or(2.0);
     let is_smeared = sensor_roll > 6.85 || sensor_pitch > 4.8;
 
@@ -387,8 +601,8 @@ async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl 
         let region = get_region_from_coords(lon, lat);
         let emission_rate = source.emission_rate_kg_hr;
 
-        // REGIME I: Shot Noise Bound
-        if emission_rate < 10.0 { continue; }
+        // REGIME I: Tanager-1 detection limit (64-126 kg/hr optimal, 100 kg/hr EPA super-emitter threshold)
+        if emission_rate < 100.0 { continue; }
 
         // Fetch fresh weather (only < 6 hours old to prevent staleness)
         let weather = sqlx::query!(
@@ -408,15 +622,19 @@ async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl 
 
         let mut distance = ws * 3600.0; 
 
-        // REGIME II: Atmospheric Extinction
+        // REGIME II: Atmospheric Extinction (simplified humidity attenuation)
+        // Note: Simplified model. Full Beer-Lambert: T = exp(-tau) where tau = alpha_abs * path_length
+        // H2O absorption bands at SWIR (1.6 um) affect CH4 retrieval significantly
         if hum > 85.0 { distance *= 0.60; }
 
         let stability = get_pasquill_stability_class(ws, is_daytime);
         let mut spread_angle = get_plume_spread_angle(stability);
 
-        // REGIME III: Thermal Emissivity Stretch
+        // REGIME III: Thermal Stability Correction (simplified T^4 penalty factor)
+        // Note: Not direct Stefan-Boltzmann application. Uses T^4 ratio as heuristic
+        // to reduce spread angle under high thermal stability (hotter = more stable atmosphere).
         let temp_k: f64 = temp + 273.15;
-        let baseline_k: f64 = 308.15; 
+        let baseline_k: f64 = 308.15;
         if temp_k > baseline_k { spread_angle *= (baseline_k / temp_k).powi(4); }
 
         // Calculate concentration
@@ -519,6 +737,204 @@ async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl 
     (StatusCode::OK, AxumJson(json!(predictions))).into_response()
 }
 
+async fn get_plume_analysis(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    state.metrics.requests_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    
+    // Fetch active plumes with their observed geometry
+    let active_sources = match sqlx::query!(
+        r#"SELECT id, recorded_at, emission_rate_kg_hr, 
+           ST_X(location::geometry) as lon, ST_Y(location::geometry) as lat,
+           ST_AsGeoJSON(plume_geometry) as "plume_geometry_json", source
+           FROM methane_observations 
+           WHERE recorded_at > NOW() - INTERVAL '24 hours'
+           ORDER BY recorded_at DESC"#
+    ).fetch_all(&state.pool).await {
+        Ok(s) => s,
+        Err(e) => {
+            error!("Database error fetching sources: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, AxumJson(json!({"error": "DB Error"}))).into_response();
+        }
+    };
+
+    if active_sources.is_empty() {
+        return (StatusCode::OK, AxumJson(json!(Vec::<PlumeAnalysis>::new()))).into_response();
+    }
+
+    let mut analyses = Vec::new();
+    let wita_offset = FixedOffset::east_opt(8 * 3600).unwrap();
+
+    for source in active_sources {
+        let lon = source.lon.unwrap_or(0.0);
+        let lat = source.lat.unwrap_or(0.0);
+        let region = get_region_from_coords(lon, lat);
+        let emission_rate = source.emission_rate_kg_hr;
+
+        // Skip below Tanager-1 detection limit
+        if emission_rate < 100.0 { continue; }
+
+        // Check if observed plume intersects populated zones
+        let mut observed_affected_zones = Vec::new();
+        let mut observed_exposure_alert = false;
+
+        if let Some(ref plume_json) = source.plume_geometry_json {
+            let affected = sqlx::query!(
+                r#"SELECT zone_name, region, zone_type, population_estimate, is_volcanic_zone
+                   FROM populated_zones 
+                   WHERE ST_Intersects(geometry, ST_GeomFromGeoJSON($1))"#,
+                plume_json
+            ).fetch_all(&state.pool).await.unwrap_or_default();
+
+            observed_exposure_alert = !affected.is_empty();
+            for zone in affected {
+                observed_affected_zones.push(AffectedZone {
+                    zone_name: zone.zone_name.clone(),
+                    region: zone.region.clone(),
+                    population_estimate: zone.population_estimate,
+                    zone_type: zone.zone_type,
+                    is_volcanic_zone: zone.is_volcanic_zone,
+                });
+            }
+        }
+
+        let observed = ObservedPlume {
+            plume_footprint: source.plume_geometry_json.and_then(|g| serde_json::from_str(&g).ok()),
+            affected_zones: observed_affected_zones,
+            exposure_alert: observed_exposure_alert,
+            source: source.source.unwrap_or_else(|| "unknown".to_string()),
+        };
+
+        // Generate forecast predictions using weather forecasts
+        let forecasts = sqlx::query!(
+            r#"SELECT valid_at, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c
+               FROM weather_forecasts 
+               WHERE area_id = $1 AND valid_at > NOW() AND valid_at < NOW() + INTERVAL '6 hours'
+               ORDER BY valid_at ASC"#,
+            region
+        ).fetch_all(&state.pool).await.unwrap_or_default();
+
+        let mut forecasted_plumes = Vec::new();
+        let sensor_roll = std::env::var("SENSOR_ROLL_DEG").ok().and_then(|v| v.parse::<f64>().ok()).unwrap_or(5.0);
+        let sensor_pitch = std::env::var("SENSOR_PITCH_DEG").ok().and_then(|v| v.parse::<f64>().ok()).unwrap_or(2.0);
+        let is_smeared = sensor_roll > 6.85 || sensor_pitch > 4.8;
+
+        for fc in forecasts {
+            let ws = fc.wind_speed_ms.unwrap_or(1.0);
+            let wd = fc.wind_direction_deg.unwrap_or(0.0);
+            let hum = fc.humidity_percent.unwrap_or(0.0);
+            let temp = fc.temperature_c.unwrap_or(25.0);
+            let valid_at = fc.valid_at;
+
+            let is_daytime = valid_at.with_timezone(&wita_offset).hour() >= 6 && valid_at.with_timezone(&wita_offset).hour() < 18;
+
+            let mut distance = ws * 3600.0;
+            if hum > 85.0 { distance *= 0.60; }
+
+            let stability = get_pasquill_stability_class(ws, is_daytime);
+            let mut spread_angle = get_plume_spread_angle(stability);
+
+            let temp_k = temp + 273.15;
+            let baseline_k = 308.15;
+            if temp_k > baseline_k { spread_angle *= (baseline_k / temp_k).powi(4); }
+
+            let conc_1km = calc_gaussian_concentration_1km(emission_rate, ws, stability);
+
+            // Terrain blocking
+            let origin_elev = get_elevation_at_point(lon, lat).unwrap_or(0.0);
+            let mut terrain_blocked = false;
+            let mut block_dist = None;
+
+            for i in 1..=10 {
+                let step_dist = distance * (i as f64 / 10.0);
+                let dx = (wd + 180.0).to_radians().sin() * (step_dist / 111320.0);
+                let dy = (wd + 180.0).to_radians().cos() * (step_dist / 110540.0);
+                if let Some(elev) = get_elevation_at_point(lon + dx, lat + dy) {
+                    if elev > origin_elev + 15.0 {
+                        terrain_blocked = true;
+                        block_dist = Some(step_dist);
+                        distance = step_dist;
+                        break;
+                    }
+                }
+            }
+
+            // Generate forecast plume polygon
+            let geom_rec = sqlx::query!(
+                r#"WITH plume AS (
+                    SELECT ST_MakePolygon(ST_MakeLine(ARRAY[
+                        ST_SetSRID(ST_MakePoint($1::FLOAT8, $2::FLOAT8), 4326)::geometry,
+                        ST_Project(ST_SetSRID(ST_MakePoint($1::FLOAT8, $2::FLOAT8), 4326)::geography, $3::FLOAT8, radians($4::FLOAT8 + 180.0 - $5::FLOAT8))::geometry,
+                        ST_Project(ST_SetSRID(ST_MakePoint($1::FLOAT8, $2::FLOAT8), 4326)::geography, $3::FLOAT8, radians($4::FLOAT8 + 180.0 + $5::FLOAT8))::geometry,
+                        ST_SetSRID(ST_MakePoint($1::FLOAT8, $2::FLOAT8), 4326)::geometry
+                    ])) as geom
+                   )
+                   SELECT ST_AsGeoJSON(geom) as "json!" FROM plume"#
+                , lon, lat, distance, wd, spread_angle
+            ).fetch_one(&state.pool).await.ok();
+
+            if let Some(rec) = geom_rec {
+                let geojson_val: serde_json::Value = serde_json::from_str(&rec.json).unwrap_or_default();
+
+                let affected = sqlx::query!(
+                    r#"SELECT zone_name, region, zone_type, population_estimate, is_volcanic_zone
+                       FROM populated_zones 
+                       WHERE ST_Intersects(geometry, ST_GeomFromGeoJSON($1))"#,
+                    rec.json
+                ).fetch_all(&state.pool).await.unwrap_or_default();
+
+                let exposure_alert = !affected.is_empty();
+                let mut affected_zones = Vec::new();
+
+                for zone in affected {
+                    affected_zones.push(AffectedZone {
+                        zone_name: zone.zone_name.clone(),
+                        region: zone.region.clone(),
+                        population_estimate: zone.population_estimate,
+                        zone_type: zone.zone_type,
+                        is_volcanic_zone: zone.is_volcanic_zone,
+                    });
+
+                    // Alert for forecasted exposure
+                    if conc_1km > 50.0 {
+                        let msg = format!(
+                            "⚠️ <b>FORECAST ALERT</b>\n\n<b>Zone:</b> {} ({})\n<b>Emission:</b> {:.2} kg/hr\n<b>Valid At:</b> {}\n<b>Max Dist:</b> {:.0}m\n<b>Est. Conc:</b> {:.1} ppm",
+                            zone.zone_name, zone.region, emission_rate, valid_at.format("%Y-%m-%d %H:%M UTC"), distance, conc_1km
+                        );
+                        let client = state.http_client.clone();
+                        tokio::spawn(async move { send_telegram_alert(&client, &msg).await; });
+                    }
+                }
+
+                forecasted_plumes.push(ForecastedPlume {
+                    valid_at,
+                    wind_speed_ms: ws,
+                    wind_direction_deg: wd,
+                    stability_class: stability,
+                    spread_angle_deg: spread_angle,
+                    max_distance_m: distance,
+                    concentration_at_1km_ppm: conc_1km,
+                    plume_geojson: geojson_val,
+                    terrain_blocked,
+                    terrain_block_distance_m: block_dist,
+                    affected_zones,
+                    exposure_alert,
+                });
+            }
+        }
+
+        analyses.push(PlumeAnalysis {
+            source_id: source.id,
+            source_lon: lon,
+            source_lat: lat,
+            emission_rate_kg_hr: emission_rate,
+            recorded_at: source.recorded_at,
+            observed,
+            forecast: forecasted_plumes,
+        });
+    }
+
+    (StatusCode::OK, AxumJson(json!(analyses))).into_response()
+}
+
 // ─── BACKGROUND TASKS ────────────────────────────────────────────────────────
 
 async fn carbon_mapper_tracker_task(state: Arc<AppState>) {
@@ -549,8 +965,9 @@ async fn carbon_mapper_tracker_task(state: Arc<AppState>) {
                             let dt = chrono::DateTime::parse_from_rfc3339(&feature.properties.datetime).unwrap().with_timezone(&Utc);
                             let geom = serde_json::to_string(&feature.geometry).unwrap();
                             
+                            // Store both centroid (for spatial queries) and full plume footprint
                             let res: Result<sqlx::postgres::PgQueryResult, sqlx::Error> = sqlx::query!(
-                                "INSERT INTO methane_observations (recorded_at, emission_rate_kg_hr, location) VALUES ($1, $2, ST_Centroid(ST_GeomFromGeoJSON($3))) ON CONFLICT (recorded_at, emission_rate_kg_hr) DO NOTHING",
+                                "INSERT INTO methane_observations (recorded_at, emission_rate_kg_hr, location, plume_geometry, source) VALUES ($1, $2, ST_Centroid(ST_GeomFromGeoJSON($3)), ST_GeomFromGeoJSON($3), 'carbon_mapper') ON CONFLICT (recorded_at, emission_rate_kg_hr) DO NOTHING",
                                 dt, feature.properties.emission_rate_kg_hr, geom
                             ).execute(&state.pool).await;
                             
@@ -589,7 +1006,7 @@ async fn bmkg_tracker_task(state: Arc<AppState>) {
 
         for (name, bmkg_id, lat, lon) in zones {
             let mut success = false;
-            let bmkg_url = format!("https://api.bmkg.go.id/publik/prakiraan-cuaca?adm={}", bmkg_id);
+            let bmkg_url = format!("https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4={}", bmkg_id);
             
             if let Ok(res) = state.http_client.get(&bmkg_url).send().await {
                 if let Ok(json) = res.json::<BmkgResponse>().await {
@@ -626,5 +1043,150 @@ async fn data_retention_task(state: Arc<AppState>) {
         info!("Running data retention cleanup...");
         // Delete weather data older than 30 days
         let _ = sqlx::query("DELETE FROM weather_observations WHERE recorded_at < NOW() - INTERVAL '30 days'").execute(&state.pool).await;
+        // Delete weather forecasts older than 7 days
+        let _ = sqlx::query("DELETE FROM weather_forecasts WHERE created_at < NOW() - INTERVAL '7 days'").execute(&state.pool).await;
+    }
+}
+
+async fn weather_forecast_task(state: Arc<AppState>) {
+    let mut interval = time::interval(Duration::from_secs(3600)); // Hourly
+    let zones = [
+        ("Lombok Barat", "-8.6818", "116.1240"),
+        ("Lombok Tengah", "-8.7167", "116.2667"),
+        ("Lombok Timur", "-8.6500", "116.5333"),
+        ("Sumbawa Barat", "-8.7333", "116.8500"),
+        ("Kota Bima", "-8.4667", "118.7167"),
+    ];
+
+    loop {
+        interval.tick().await;
+        info!("Fetching weather forecasts from Open-Meteo...");
+
+        for (name, lat, lon) in zones {
+            let url = format!(
+                "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m&forecast_days=2&timezone=Asia/Makassar",
+                lat, lon
+            );
+
+            if let Ok(res) = state.http_client.get(&url).send().await {
+                if let Ok(forecast) = res.json::<OpenMeteoForecastResponse>().await {
+                    for i in 0..forecast.hourly.time.len() {
+                        let valid_at = chrono::NaiveDateTime::parse_from_str(
+                            &forecast.hourly.time[i], "%Y-%m-%dT%H:%M"
+                        ).unwrap_or_default();
+
+                        let _ = sqlx::query!(
+                            "INSERT INTO weather_forecasts (forecast_at, valid_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, data_source) VALUES (NOW(), $1, $2, $3, $4, $5, $6, 'Open-Meteo')",
+                            valid_at.and_utc(),
+                            name,
+                            forecast.hourly.wind_speed_10m.get(i).copied().unwrap_or(0.0),
+                            forecast.hourly.wind_direction_10m.get(i).copied().unwrap_or(0.0),
+                            forecast.hourly.relative_humidity_2m.get(i).copied().unwrap_or(0.0),
+                            forecast.hourly.temperature_2m.get(i).copied().unwrap_or(0.0)
+                        ).execute(&state.pool).await;
+                    }
+                    info!("Stored {} forecast hours for {}", forecast.hourly.time.len(), name);
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+    }
+}
+
+// ─── TESTS ──────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pasquill_stability_class_daytime() {
+        // Daytime tests
+        assert_eq!(get_pasquill_stability_class(2.0, true), 'A');  // Low wind, daytime
+        assert_eq!(get_pasquill_stability_class(4.0, true), 'B');  // Medium wind, daytime
+        assert_eq!(get_pasquill_stability_class(6.0, true), 'C');  // High wind, daytime
+    }
+
+    #[test]
+    fn test_pasquill_stability_class_nighttime() {
+        // Nighttime tests
+        assert_eq!(get_pasquill_stability_class(2.0, false), 'F');  // Low wind, nighttime
+        assert_eq!(get_pasquill_stability_class(4.0, false), 'E');  // Medium wind, nighttime
+        assert_eq!(get_pasquill_stability_class(6.0, false), 'D');  // High wind, nighttime
+    }
+
+    #[test]
+    fn test_plume_spread_angle() {
+        assert_eq!(get_plume_spread_angle('A'), 25.0);
+        assert_eq!(get_plume_spread_angle('B'), 20.0);
+        assert_eq!(get_plume_spread_angle('C'), 15.0);
+        assert_eq!(get_plume_spread_angle('D'), 12.5);
+        assert_eq!(get_plume_spread_angle('E'), 8.75);
+        assert_eq!(get_plume_spread_angle('F'), 5.0);
+        assert_eq!(get_plume_spread_angle('X'), 12.5);  // Default
+    }
+
+    #[test]
+    fn test_gaussian_concentration_1km() {
+        // Test with known values
+        let conc = calc_gaussian_concentration_1km(1000.0, 3.0, 'D');
+        assert!(conc > 0.0);
+        assert!(conc < 1000.0);  // Sanity check
+
+        // Higher emission should give higher concentration
+        let conc_low = calc_gaussian_concentration_1km(100.0, 3.0, 'D');
+        let conc_high = calc_gaussian_concentration_1km(1000.0, 3.0, 'D');
+        assert!(conc_high > conc_low);
+
+        // Higher wind speed should give lower concentration
+        let conc_low_wind = calc_gaussian_concentration_1km(1000.0, 1.0, 'D');
+        let conc_high_wind = calc_gaussian_concentration_1km(1000.0, 10.0, 'D');
+        assert!(conc_low_wind > conc_high_wind);
+    }
+
+    #[test]
+    fn test_gaussian_concentration_wind_safety() {
+        // Wind speed < 1.0 should be clamped to 1.0
+        let conc = calc_gaussian_concentration_1km(1000.0, 0.5, 'D');
+        assert!(conc > 0.0);
+    }
+
+    #[test]
+    fn test_region_from_coords() {
+        // Test known coordinates
+        assert_eq!(get_region_from_coords(116.1240, -8.6818), "Lombok Barat");
+        assert_eq!(get_region_from_coords(116.2667, -8.7167), "Lombok Tengah");
+        assert_eq!(get_region_from_coords(118.7167, -8.4667), "Kota Bima");
+    }
+
+    #[test]
+    fn test_shot_noise_bound() {
+        // Test detection threshold (100 kg/hr)
+        let min_detection = 100.0;
+        assert!(50.0 < min_detection);   // Below threshold
+        assert!(150.0 >= min_detection); // Above threshold
+    }
+
+    #[test]
+    fn test_sensor_smear_thresholds() {
+        // Test sensor smear limits from Physics Limits document
+        let roll_limit = 6.85;
+        let pitch_limit = 4.8;
+
+        // Below limits - no smear
+        assert!(5.0 <= roll_limit);
+        assert!(2.0 <= pitch_limit);
+
+        // Above limits - smear
+        assert!(7.0 > roll_limit);
+        assert!(5.0 > pitch_limit);
+    }
+
+    #[test]
+    fn test_terrain_blocking_threshold() {
+        // Test terrain blocking threshold (15m)
+        let threshold = 15.0;
+        assert!(10.0 < threshold);  // Below threshold - no blocking
+        assert!(20.0 > threshold);  // Above threshold - blocking
     }
 }

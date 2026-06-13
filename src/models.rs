@@ -10,8 +10,20 @@ pub struct MethaneObservation {
     pub recorded_at: DateTime<Utc>,
     pub emission_rate_kg_hr: f64,
     pub location_json: String, // From ST_AsGeoJSON
-    #[serde(rename = "green_area_ha")]
-    pub total_green_area_hectares: f64,
+    pub plume_geometry_json: Option<String>, // From ST_AsGeoJSON (observed footprint)
+    pub source: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct MethanePlumeObserved {
+    pub id: Uuid,
+    pub recorded_at: DateTime<Utc>,
+    pub emission_rate_kg_hr: f64,
+    pub location: serde_json::Value,
+    pub plume_footprint: Option<serde_json::Value>, // Actual observed plume geometry
+    pub source: String,
+    pub affected_zones: Vec<AffectedZone>,
+    pub exposure_alert: bool,
 }
 
 // ─── Weather Observation ─────────────────────────────────────────────────────
@@ -25,6 +37,35 @@ pub struct WeatherObservation {
     pub humidity_percent: Option<f64>,
     pub temperature_c: Option<f64>,
     pub data_source: String,
+}
+
+// ─── Weather Forecast ────────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow)]
+pub struct WeatherForecast {
+    pub id: i32,
+    pub forecast_at: DateTime<Utc>,
+    pub valid_at: DateTime<Utc>,
+    pub area_id: String,
+    pub wind_speed_ms: Option<f64>,
+    pub wind_direction_deg: Option<f64>,
+    pub humidity_percent: Option<f64>,
+    pub temperature_c: Option<f64>,
+    pub data_source: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OpenMeteoForecastResponse {
+    pub hourly: HourlyForecast,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HourlyForecast {
+    pub time: Vec<String>,
+    pub temperature_2m: Vec<f64>,
+    pub relative_humidity_2m: Vec<f64>,
+    pub wind_speed_10m: Vec<f64>,
+    pub wind_direction_10m: Vec<f64>,
 }
 
 // ─── Plume Prediction ────────────────────────────────────────────────────────
@@ -60,6 +101,41 @@ pub struct MultiPlumePrediction {
 }
 
 #[derive(Debug, Serialize, Clone)]
+pub struct PlumeAnalysis {
+    pub source_id: Uuid,
+    pub source_lon: f64,
+    pub source_lat: f64,
+    pub emission_rate_kg_hr: f64,
+    pub recorded_at: DateTime<Utc>,
+    pub observed: ObservedPlume,
+    pub forecast: Vec<ForecastedPlume>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct ObservedPlume {
+    pub plume_footprint: Option<serde_json::Value>, // Actual satellite observation
+    pub affected_zones: Vec<AffectedZone>,
+    pub exposure_alert: bool,
+    pub source: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct ForecastedPlume {
+    pub valid_at: DateTime<Utc>,
+    pub wind_speed_ms: f64,
+    pub wind_direction_deg: f64,
+    pub stability_class: char,
+    pub spread_angle_deg: f64,
+    pub max_distance_m: f64,
+    pub concentration_at_1km_ppm: f64,
+    pub plume_geojson: serde_json::Value,
+    pub terrain_blocked: bool,
+    pub terrain_block_distance_m: Option<f64>,
+    pub affected_zones: Vec<AffectedZone>,
+    pub exposure_alert: bool,
+}
+
+#[derive(Debug, Serialize, Clone)]
 pub struct AffectedZone {
     pub zone_name: String,
     pub region: String,
@@ -73,6 +149,8 @@ pub struct MethanePlumeResponse {
     pub recorded_at: DateTime<Utc>,
     pub emission_rate_kg_hr: f64,
     pub geometry: serde_json::Value,
+    pub plume_footprint: Option<serde_json::Value>,
+    pub source: Option<String>,
 }
 
 // ─── Health / Stats ──────────────────────────────────────────────────────────

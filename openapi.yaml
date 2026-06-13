@@ -1,0 +1,536 @@
+openapi: 3.0.3
+info:
+  title: GeoESG A.E.C.O NTB Methane Tracker API
+  description: |
+    Advanced real-time methane emission tracking, Gaussian dispersion prediction, 
+    and exposure alerting system for West Nusa Tenggara (NTB).
+  version: 1.0.0
+  contact:
+    name: GeoESG A.E.C.O Team
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+
+paths:
+  /health:
+    get:
+      summary: Health Check
+      description: Returns the health status of the system
+      operationId: healthCheck
+      tags:
+        - System
+      responses:
+        '200':
+          description: System is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /api/metrics:
+    get:
+      summary: Prometheus Metrics
+      description: Returns Prometheus-format metrics
+      operationId: getMetrics
+      tags:
+        - System
+      responses:
+        '200':
+          description: Metrics in Prometheus format
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/stats:
+    get:
+      summary: System Statistics
+      description: Returns system statistics
+      operationId: getStats
+      tags:
+        - System
+      responses:
+        '200':
+          description: System statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStats'
+
+  /api/weather:
+    get:
+      summary: Latest Weather
+      description: Returns latest weather observations
+      operationId: getWeather
+      tags:
+        - Weather
+      responses:
+        '200':
+          description: Weather observations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WeatherObservation'
+
+  /api/weather/forecast:
+    get:
+      summary: Weather Forecast
+      description: Returns weather forecasts
+      operationId: getWeatherForecast
+      tags:
+        - Weather
+      responses:
+        '200':
+          description: Weather forecasts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WeatherForecast'
+
+  /api/methane/plumes:
+    get:
+      summary: Methane Plumes
+      description: Returns recent methane plume observations
+      operationId: getMethanePlumes
+      tags:
+        - Methane
+      responses:
+        '200':
+          description: Methane plume observations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MethanePlumeResponse'
+
+  /api/plume-analysis:
+    get:
+      summary: Plume Analysis
+      description: Returns plume analysis with observed and forecasted data
+      operationId: getPlumeAnalysis
+      tags:
+        - Analysis
+      responses:
+        '200':
+          description: Plume analysis
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlumeAnalysis'
+
+  /api/zones:
+    get:
+      summary: Populated Zones
+      description: Returns populated zones as GeoJSON
+      operationId: getPopulatedZones
+      tags:
+        - Zones
+      responses:
+        '200':
+          description: GeoJSON FeatureCollection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeoJSON'
+
+  /api/stac:
+    get:
+      summary: STAC Catalog Root
+      description: Returns STAC catalog root
+      operationId: stacRoot
+      tags:
+        - STAC
+      responses:
+        '200':
+          description: STAC catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StacCatalog'
+
+  /api/stac/collections:
+    get:
+      summary: STAC Collections
+      description: Returns list of STAC collections
+      operationId: stacCollections
+      tags:
+        - STAC
+      responses:
+        '200':
+          description: STAC collections
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  collections:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StacCollection'
+
+  /api/stac/search:
+    get:
+      summary: STAC Search
+      description: Search STAC items
+      operationId: stacSearch
+      tags:
+        - STAC
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: bbox
+          in: query
+          schema:
+            type: array
+            items:
+              type: number
+      responses:
+        '200':
+          description: STAC search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StacSearchResponse'
+
+  /ws:
+    get:
+      summary: WebSocket Connection
+      description: WebSocket endpoint for real-time updates
+      operationId: wsConnect
+      tags:
+        - WebSocket
+      responses:
+        '101':
+          description: WebSocket upgrade
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [HEALTHY, DEGRADED]
+        database:
+          $ref: '#/components/schemas/ComponentHealth'
+        dem_file:
+          $ref: '#/components/schemas/ComponentHealth'
+        last_bmkg_fetch:
+          type: string
+          format: date-time
+        last_carbon_mapper_fetch:
+          type: string
+          format: date-time
+
+    ComponentHealth:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [OK, ERROR]
+        message:
+          type: string
+          nullable: true
+
+    SystemStats:
+      type: object
+      properties:
+        total_plumes:
+          type: integer
+        plumes_last_24h:
+          type: integer
+        total_weather_records:
+          type: integer
+        total_alerts:
+          type: integer
+        active_zones:
+          type: integer
+
+    WeatherObservation:
+      type: object
+      properties:
+        recorded_at:
+          type: string
+          format: date-time
+        area_id:
+          type: string
+        wind_speed_ms:
+          type: number
+          nullable: true
+        wind_direction_deg:
+          type: number
+          nullable: true
+        humidity_percent:
+          type: number
+          nullable: true
+        temperature_c:
+          type: number
+          nullable: true
+        data_source:
+          type: string
+
+    WeatherForecast:
+      type: object
+      properties:
+        forecast_at:
+          type: string
+          format: date-time
+        valid_at:
+          type: string
+          format: date-time
+        area_id:
+          type: string
+        wind_speed_ms:
+          type: number
+          nullable: true
+        wind_direction_deg:
+          type: number
+          nullable: true
+        humidity_percent:
+          type: number
+          nullable: true
+        temperature_c:
+          type: number
+          nullable: true
+        data_source:
+          type: string
+
+    MethanePlumeResponse:
+      type: object
+      properties:
+        recorded_at:
+          type: string
+          format: date-time
+        emission_rate_kg_hr:
+          type: number
+        geometry:
+          $ref: '#/components/schemas/GeoJSON'
+        plume_footprint:
+          $ref: '#/components/schemas/GeoJSON'
+          nullable: true
+        source:
+          type: string
+          nullable: true
+
+    PlumeAnalysis:
+      type: object
+      properties:
+        source_id:
+          type: string
+          format: uuid
+        source_lon:
+          type: number
+        source_lat:
+          type: number
+        emission_rate_kg_hr:
+          type: number
+        recorded_at:
+          type: string
+          format: date-time
+        observed:
+          $ref: '#/components/schemas/ObservedPlume'
+        forecast:
+          type: array
+          items:
+            $ref: '#/components/schemas/ForecastedPlume'
+
+    ObservedPlume:
+      type: object
+      properties:
+        plume_footprint:
+          $ref: '#/components/schemas/GeoJSON'
+          nullable: true
+        affected_zones:
+          type: array
+          items:
+            $ref: '#/components/schemas/AffectedZone'
+        exposure_alert:
+          type: boolean
+        source:
+          type: string
+
+    ForecastedPlume:
+      type: object
+      properties:
+        valid_at:
+          type: string
+          format: date-time
+        wind_speed_ms:
+          type: number
+        wind_direction_deg:
+          type: number
+        stability_class:
+          type: string
+        spread_angle_deg:
+          type: number
+        max_distance_m:
+          type: number
+        concentration_at_1km_ppm:
+          type: number
+        plume_geojson:
+          $ref: '#/components/schemas/GeoJSON'
+        terrain_blocked:
+          type: boolean
+        terrain_block_distance_m:
+          type: number
+          nullable: true
+        affected_zones:
+          type: array
+          items:
+            $ref: '#/components/schemas/AffectedZone'
+        exposure_alert:
+          type: boolean
+
+    AffectedZone:
+      type: object
+      properties:
+        zone_name:
+          type: string
+        region:
+          type: string
+        population_estimate:
+          type: integer
+          nullable: true
+        zone_type:
+          type: string
+        is_volcanic_zone:
+          type: boolean
+
+    StacCatalog:
+      type: object
+      properties:
+        stac_version:
+          type: string
+        type:
+          type: string
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/StacLink'
+
+    StacCollection:
+      type: object
+      properties:
+        stac_version:
+          type: string
+        type:
+          type: string
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        license:
+          type: string
+        extent:
+          $ref: '#/components/schemas/StacExtent'
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/StacLink'
+
+    StacExtent:
+      type: object
+      properties:
+        spatial:
+          type: object
+          properties:
+            bbox:
+              type: array
+              items:
+                type: array
+                items:
+                  type: number
+        temporal:
+          type: object
+          properties:
+            interval:
+              type: array
+              items:
+                type: array
+                items:
+                  type: string
+                  format: date-time
+                  nullable: true
+
+    StacSearchResponse:
+      type: object
+      properties:
+        type:
+          type: string
+        features:
+          type: array
+          items:
+            $ref: '#/components/schemas/StacItem'
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/StacLink'
+        context:
+          type: object
+          properties:
+            returned:
+              type: integer
+            matched:
+              type: integer
+              nullable: true
+
+    StacItem:
+      type: object
+      properties:
+        type:
+          type: string
+        id:
+          type: string
+        geometry:
+          $ref: '#/components/schemas/GeoJSON'
+        bbox:
+          type: array
+          items:
+            type: number
+        properties:
+          type: object
+        assets:
+          type: object
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/StacLink'
+
+    StacLink:
+      type: object
+      properties:
+        rel:
+          type: string
+        href:
+          type: string
+        type:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+
+    GeoJSON:
+      type: object
+      description: GeoJSON geometry or feature
