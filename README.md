@@ -121,21 +121,25 @@ openapi.yaml      # API documentation (OpenAPI 3.0.3)
 
 ## Detection Thresholds
 
-Based on Tanager-1 satellite specifications:
-- **Minimum Detection:** 100 kg/hr (EPA super-emitter threshold)
-- **Optimal Detection:** 64-126 kg/hr (under ideal conditions)
+Based on Tanager-1 satellite specifications (Source: Carbon Mapper Product Guide v1.1.6):
+- **90% Probability of Detection:** 90-180 kg/hr (3 m/s wind, 35° SZA, 25% albedo, 30m GSD)
+- **Conservative Threshold:** 150 kg/hr (for reliable detection)
 - **Spatial Resolution:** 30m GSD
-- **Spectral Range:** 400-2500nm (426 bands)
+- **Geolocation Accuracy:** 50m (CE90)
+- **Spectral Range:** 400-2500nm (5nm sampling, 5.5nm FWHM)
+- **SNR @ 2200nm:** 310-655
 
 ## Physics Constraints
 
 | Parameter | Value | Source |
 |-----------|-------|--------|
-| Sensor Roll Limit | 6.85° | Tanager-1 TDI specifications |
-| Sensor Pitch Limit | 4.8° | Tanager-1 TDI specifications |
+| Detection Limit (90%) | 90-180 kg/hr | Carbon Mapper Product Guide |
+| Detection Limit (Conservative) | 150 kg/hr | Carbon Mapper Product Guide |
+| Sensor Roll Limit | 6.85° | Physics Limits document |
+| Sensor Pitch Limit | 4.8° | Physics Limits document |
 | Terrain Blocking Threshold | 15m | Simplified terrain model |
 | Humidity Attenuation | 85% threshold | Simplified atmospheric model |
-| Detection Limit | 100 kg/hr | EPA super-emitter definition |
+| Geolocation Accuracy | 50m CE90 | Carbon Mapper Product Guide |
 
 ## Environment Variables
 

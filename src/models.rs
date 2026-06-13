@@ -267,3 +267,172 @@ pub struct StacLink {
     pub rel: String,
     pub href: String,
 }
+
+// ─── Carbon Mapper API Models ────────────────────────────────────────────────
+// Source: Carbon Mapper Product Guide v1.1.6 (Feb 14, 2025)
+// https://carbonmapper.org/articles/product-guide
+
+/// Carbon Mapper API response for plumes
+#[derive(Debug, Deserialize)]
+pub struct CarbonMapperPlumeResponse {
+    pub bbox_count: u32,
+    pub total_count: u32,
+    pub limit: u32,
+    pub offset: u32,
+    pub items: Vec<CarbonMapperPlume>,
+    #[serde(default)]
+    pub nearby_items: Vec<serde_json::Value>,
+}
+
+/// Individual plume from Carbon Mapper API
+/// Source: Product Guide - "Plume List Fields"
+#[derive(Debug, Deserialize, Clone)]
+pub struct CarbonMapperPlume {
+    pub id: Uuid,
+    pub plume_id: String,
+    pub gas: String,  // CH4 or CO2
+    pub geometry_json: serde_json::Value,
+    pub scene_id: Option<String>,
+    pub scene_timestamp: DateTime<Utc>,
+    pub instrument: String,  // tan, emi, ang, av3, GAO
+    pub platform: String,    // ISS, Tanager-1, etc.
+    
+    // Emission data
+    pub emission_auto: f64,  // kg/hr
+    pub emission_uncertainty_auto: Option<f64>,  // ± kg/hr
+    
+    // Wind data
+    pub wind_speed_avg_auto: Option<f64>,  // m/s
+    pub wind_speed_std_auto: Option<f64>,
+    pub wind_direction_avg_auto: Option<f64>,  // degrees
+    pub wind_direction_std_auto: Option<f64>,
+    pub wind_source_auto: Option<String>,  // HRRR, ECMWF_IFS, ERA5
+    
+    // Plume geometry
+    pub plume_bounds: Option<Vec<f64>>,  // [min_lon, min_lat, max_lon, max_lat]
+    pub plume_length: Option<f64>,  // meters
+    
+    // Quality
+    pub plume_quality: Option<String>,  // good, questionable, bad
+    
+    // Sector attribution
+    pub sector: Option<String>,  // IPCC sector code (1B2, 6A, etc.)
+    
+    // URLs for data products
+    pub plume_png: Option<String>,
+    pub plume_rgb_png: Option<String>,
+    pub plume_tif: Option<String>,
+    pub con_tif: Option<String>,  // concentration map (ppm-m)
+    pub rgb_png: Option<String>,
+    
+    // Metadata
+    pub collection: Option<String>,
+    pub cmf_type: Option<String>,  // mfa, mfm, mfma
+    pub status: Option<String>,  // published, etc.
+    pub hide_emission: Option<bool>,
+    pub published_at: Option<DateTime<Utc>>,
+    
+    // IME (Integrated Mass Enhancement)
+    pub ime: Option<f64>,  // kg of methane in plume
+    pub ime_uncertainty: Option<f64>,
+    
+    // Additional fields
+    pub emission_version: Option<String>,
+    pub processing_software: Option<String>,
+    pub gsd: Option<f64>,  // ground sampling distance
+    pub sensitivity_mode: Option<String>,
+    pub off_nadir: Option<f64>,  // degrees
+    pub mission_phase: Option<String>,
+    pub provider: Option<String>,
+}
+
+/// Sector attribution codes
+/// Source: Product Guide - "Sector Attribution Codes"
+#[derive(Debug, Deserialize, Clone, Serialize)]
+pub enum IpccSector {
+    #[serde(rename = "1A1")]
+    ElectricityGeneration,
+    #[serde(rename = "1B1a")]
+    CoalMining,
+    #[serde(rename = "1B2")]
+    OilAndGas,
+    #[serde(rename = "4A")]
+    EntericFermentation,
+    #[serde(rename = "4B")]
+    ManureManagement,
+    #[serde(rename = "6A")]
+    SolidWaste,
+    #[serde(rename = "6B")]
+    WasteWater,
+    #[serde(rename = "Other")]
+    Other,
+}
+
+impl IpccSector {
+    pub fn from_code(code: &str) -> Self {
+        match code {
+            "1A1" => Self::ElectricityGeneration,
+            "1B1a" => Self::CoalMining,
+            "1B2" => Self::OilAndGas,
+            "4A" => Self::EntericFermentation,
+            "4B" => Self::ManureManagement,
+            "6A" => Self::SolidWaste,
+            "6B" => Self::WasteWater,
+            _ => Self::Other,
+        }
+    }
+    
+    pub fn to_name(&self) -> &'static str {
+        match self {
+            Self::ElectricityGeneration => "Electricity Generation",
+            Self::CoalMining => "Coal Mining",
+            Self::OilAndGas => "Oil & Natural Gas",
+            Self::EntericFermentation => "Enteric Fermentation",
+            Self::ManureManagement => "Manure Management",
+            Self::SolidWaste => "Solid Waste",
+            Self::WasteWater => "Waste Water",
+            Self::Other => "Other",
+        }
+    }
+}
+
+/// PHME (Potentially Harmful Methane Event) criteria
+/// Source: Product Guide - "L3A-PHME"
+#[derive(Debug, Deserialize, Clone)]
+pub struct PhmeCriteria {
+    /// Proximity-only: plume origin is within 100 m of nearest sensitive receptor
+    pub proximity_threshold_m: f64,  // 100m
+    
+    /// Size and proximity: plume length > 1000m AND overlaps sensitive receptor
+    pub size_threshold_m: f64,  // 1000m
+}
+
+impl Default for PhmeCriteria {
+    fn default() -> Self {
+        Self {
+            proximity_threshold_m: 100.0,
+            size_threshold_m: 1000.0,
+        }
+    }
+}
+
+impl PhmeCriteria {
+    /// Check if a plume qualifies as PHME
+    pub fn is_phme(&self, plume_length_m: Option<f64>, distance_to_receptor_m: Option<f64>) -> bool {
+        // Proximity-only: plume origin within 100m of sensitive receptor
+        if let Some(dist) = distance_to_receptor_m {
+            if dist <= self.proximity_threshold_m {
+                return true;
+            }
+        }
+        
+        // Size and proximity: plume > 1000m AND overlaps receptor
+        if let (Some(length), Some(dist)) = (plume_length_m, distance_to_receptor_m) {
+            if length > self.size_threshold_m && dist <= self.size_threshold_m {
+                return true;
+            }
+        }
+        
+        false
+    }
+}

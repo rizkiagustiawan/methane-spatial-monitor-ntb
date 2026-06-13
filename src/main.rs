@@ -608,8 +608,11 @@ async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl 
         let region = get_region_from_coords(lon, lat);
         let emission_rate = source.emission_rate_kg_hr;
 
-        // REGIME I: Tanager-1 detection limit (64-126 kg/hr optimal, 100 kg/hr EPA super-emitter threshold)
-        if emission_rate < 100.0 { continue; }
+        // REGIME I: Tanager-1 detection limit
+        // Source: Carbon Mapper Product Guide v1.1.6 - "CH4 90% Probability of Detection: 90-180 kg/hr"
+        // Conditions: 3 m/s wind, 35° SZA, 25% albedo, 30m GSD
+        // Conservative threshold: 150 kg/hr for reliable detection
+        if emission_rate < tanager1::DETECTION_CONSERVATIVE_KG_HR { continue; }
 
         // Fetch fresh weather (only < 6 hours old to prevent staleness)
         let weather = sqlx::query!(
@@ -777,7 +780,8 @@ async fn get_plume_analysis(State(state): State<Arc<AppState>>) -> impl IntoResp
         let emission_rate = source.emission_rate_kg_hr;
 
         // Skip below Tanager-1 detection limit
-        if emission_rate < 100.0 { continue; }
+        // Source: Carbon Mapper Product Guide - "90-180 kg/hr (90% Probability of Detection)"
+        if emission_rate < tanager1::DETECTION_90PCT_KG_HR { continue; }
 
         // Check if observed plume intersects populated zones
         let mut observed_affected_zones = Vec::new();
@@ -839,8 +843,8 @@ async fn get_plume_analysis(State(state): State<Arc<AppState>>) -> impl IntoResp
             let stability = get_pasquill_stability_class(ws, is_daytime);
             let mut spread_angle = get_plume_spread_angle(stability);
 
-            let temp_k = temp + 273.15;
-            let baseline_k = 308.15;
+            let temp_k: f64 = temp + 273.15;
+            let baseline_k: f64 = 308.15;
             if temp_k > baseline_k { spread_angle *= (baseline_k / temp_k).powi(4); }
 
             let conc_1km = calc_gaussian_concentration_1km(emission_rate, ws, stability);
@@ -1168,10 +1172,11 @@ mod tests {
 
     #[test]
     fn test_shot_noise_bound() {
-        // Test detection threshold (100 kg/hr)
-        let min_detection = 100.0;
+        // Source: Carbon Mapper Product Guide - "90-180 kg/hr (90% Probability of Detection)"
+        let min_detection = tanager1::DETECTION_90PCT_KG_HR;
         assert!(50.0 < min_detection);   // Below threshold
-        assert!(150.0 >= min_detection); // Above threshold
+        assert!(100.0 >= min_detection); // Above threshold
+        assert_eq!(min_detection, 90.0);
     }
 
     #[test]

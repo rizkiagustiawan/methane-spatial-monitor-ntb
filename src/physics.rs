@@ -4,44 +4,68 @@
 /// No overclaiming - every limitation is documented.
 /// 
 /// References:
-/// - Tanager-1: Carbon Mapper AMT paper (2025), WMO OSCAR
+/// - Tanager-1: Carbon Mapper Product Guide v1.1.6 (Feb 14, 2025)
 /// - Physics Limits: Purdue University, NOAA, ESA documentation
 /// - Gaussian Plume: Turner (1970), ISC3 Manual
 /// - Atmospheric: HITRAN database, Beer-Lambert Law
 
 // ─── TANAGER-1 SATELLITE SPECIFICATIONS ─────────────────────────────────────
-// Source: Carbon Mapper AMT paper (2025), WMO OSCAR database
+// Source: Carbon Mapper Product Guide v1.1.6 (Feb 14, 2025)
+// https://carbonmapper.org/articles/product-guide
 
 pub mod tanager1 {
-    /// Minimum detection limit under optimal conditions
-    /// Source: AMT paper - "64 to 126 kg CH4/hr under optimal baseline conditions"
-    /// Optimal = 25% albedo, 45° solar zenith angle, 3 m/s wind
-    /// Conservative threshold for reliable detection: 100 kg/hr (EPA super-emitter)
-    pub const MIN_DETECTION_OPTIMAL_KG_HR: f64 = 64.0;
-    pub const MIN_DETECTION_CONSERVATIVE_KG_HR: f64 = 100.0;
+    /// CH4 90% Probability of Detection
+    /// Source: Carbon Mapper Product Guide - "90-180 kg/hr"
+    /// Conditions: 3 m/s wind, 35° Solar Zenith Angle, 25% albedo, 30m GSD
+    /// 
+    /// We use 90 kg/hr as the lower bound (best case)
+    /// and 180 kg/hr as the upper bound (worst case)
+    /// Conservative threshold: 150 kg/hr for reliable detection
+    pub const DETECTION_90PCT_KG_HR: f64 = 90.0;
+    pub const DETECTION_90PCT_UPPER_KG_HR: f64 = 180.0;
+    pub const DETECTION_CONSERVATIVE_KG_HR: f64 = 150.0;
     
     /// Spatial resolution (Ground Sample Distance)
-    /// Source: WMO OSCAR - "30 m GSD"
+    /// Source: Product Guide - "CH4/CO2 image product pixel size: 30 meters"
     pub const GSD_METERS: f64 = 30.0;
     
-    /// Spectral range and resolution
-    /// Source: WMO OSCAR - "400-2500 nm, 426 bands @ 5 nm"
+    /// Plume geolocation accuracy
+    /// Source: Product Guide - "Plume geolocation accuracy (CE90): 50 meters"
+    pub const GEOLOCATION_ACCURACY_M: f64 = 50.0;
+    
+    /// Spectral specifications
+    /// Source: Product Guide - "Spectral range: 400-2500 nm, Spectral sampling: 5 nm, FWHM: 5.5 nm"
     pub const SPECTRAL_RANGE_NM: (f64, f64) = (400.0, 2500.0);
-    pub const NUM_BANDS: u32 = 426;
-    pub const SPECTRAL_RESOLUTION_NM: f64 = 5.0;
+    pub const SPECTRAL_SAMPLING_NM: f64 = 5.0;
+    pub const SPECTRAL_FWHM_NM: f64 = 5.5;
+    
+    /// Signal-to-noise ratio
+    /// Source: Product Guide - "Signal-to-noise @ 2200nm: 310 – 655"
+    pub const SNR_2200NM_MIN: f64 = 310.0;
+    pub const SNR_2200NM_MAX: f64 = 655.0;
     
     /// CH4 absorption band used for retrieval
-    /// Source: AMT paper - SWIR band around 1.6 μm
-    pub const CH4_ABSORPTION_BAND_UM: f64 = 1.6;
+    /// Source: Product Guide - SWIR band around 2.2 μm (2200 nm)
+    pub const CH4_ABSORPTION_BAND_NM: f64 = 2200.0;
     
     /// Swath width
-    /// Source: WMO OSCAR - "18 km"
-    pub const SWATH_KM: f64 = 18.0;
+    /// Source: Product Guide - "Swath width: 18.6 kilometers at nadir"
+    pub const SWATH_KM: f64 = 18.6;
     
     /// Orbit parameters
-    /// Source: WMO OSCAR - "SSO, 520 km, 98°"
+    /// Source: Product Guide - "Final Operational Orbit"
     pub const ORBIT_ALTITUDE_KM: f64 = 520.0;
     pub const ORBIT_INCLINATION_DEG: f64 = 98.0;
+    
+    /// Minimum wind speed for valid emission estimate
+    /// Source: Product Guide - "3 m/s wind" used in detection probability
+    pub const MIN_WIND_SPEED_MS: f64 = 3.0;
+    
+    /// Optimal conditions for detection
+    /// Source: Product Guide - "3 m/s wind, 35 deg Solar Zenith Angle, 25% albedo, 30 m GSD"
+    pub const OPTIMAL_WIND_MS: f64 = 3.0;
+    pub const OPTIMAL_SZA_DEG: f64 = 35.0;
+    pub const OPTIMAL_ALBEDO: f64 = 0.25;
 }
 
 // ─── SENSOR PHYSICS CONSTRAINTS ─────────────────────────────────────────────
@@ -318,17 +342,20 @@ pub mod limitations {
     /// Document all limitations of this tool
     /// 
     /// CRITICAL: These MUST be communicated to users
+    /// Source: Carbon Mapper Product Guide v1.1.6
     pub const LIMITATIONS: &[&str] = &[
-        "1. DETECTION LIMIT: Tanager-1 cannot detect emissions below ~64 kg/hr (optimal) or ~100 kg/hr (conservative)",
+        "1. DETECTION LIMIT: Tanager-1 90% probability of detection: 90-180 kg/hr (3 m/s wind, 35° SZA, 25% albedo)",
         "2. SNAPSHOT vs CONTINUOUS: Carbon Mapper provides snapshots, not continuous monitoring",
         "3. GAUSSIAN ASSUMPTIONS: Model assumes steady-state, flat terrain, uniform wind",
         "4. WEATHER UNCERTAINTY: Single point weather data may not represent plume conditions",
         "5. TERRAIN SIMPLIFICATION: 15m threshold is arbitrary, real terrain effects are complex",
         "6. NO CHEMICAL REACTION: CH4 lifetime (~12 years) not modeled",
         "7. SPATIAL RESOLUTION: 30m GSD - cannot resolve plumes smaller than this",
-        "8. ATMOSPHERIC CONDITIONS: Heavy cloud cover blocks optical observation",
-        "9. RETRIEVAL UNCERTAINTY: Emission rate estimates have ±40% uncertainty",
-        "10. MODEL UNCERTAINTY: Gaussian plume has ±50% uncertainty for predictions",
+        "8. GEOLOCATION ACCURACY: 50m CE90 - plume origin may be offset",
+        "9. ATMOSPHERIC CONDITIONS: Heavy cloud cover blocks optical observation",
+        "10. RETRIEVAL UNCERTAINTY: Emission rate estimates have uncertainty from IME and wind",
+        "11. MODEL UNCERTAINTY: Gaussian plume has ±50% uncertainty for predictions",
+        "12. WIND DATA: Uses reanalysis data (HRRR, ECMWF, ERA5), not direct measurement",
     ];
     
     /// Get formatted limitations string
@@ -345,18 +372,42 @@ mod tests {
 
     #[test]
     fn test_tanager1_detection_limits() {
-        // Test that detection limits are reasonable
-        assert!(tanager1::MIN_DETECTION_OPTIMAL_KG_HR > 0.0);
-        assert!(tanager1::MIN_DETECTION_CONSERVATIVE_KG_HR > tanager1::MIN_DETECTION_OPTIMAL_KG_HR);
-        assert_eq!(tanager1::MIN_DETECTION_OPTIMAL_KG_HR, 64.0);
-        assert_eq!(tanager1::MIN_DETECTION_CONSERVATIVE_KG_HR, 100.0);
+        // Source: Carbon Mapper Product Guide v1.1.6
+        // "CH4 90% Probability of Detection: 90-180 kg/hr"
+        assert!(tanager1::DETECTION_90PCT_KG_HR > 0.0);
+        assert!(tanager1::DETECTION_90PCT_UPPER_KG_HR > tanager1::DETECTION_90PCT_KG_HR);
+        assert!(tanager1::DETECTION_CONSERVATIVE_KG_HR > tanager1::DETECTION_90PCT_KG_HR);
+        assert_eq!(tanager1::DETECTION_90PCT_KG_HR, 90.0);
+        assert_eq!(tanager1::DETECTION_90PCT_UPPER_KG_HR, 180.0);
+        assert_eq!(tanager1::DETECTION_CONSERVATIVE_KG_HR, 150.0);
     }
 
     #[test]
     fn test_tanager1_spatial_resolution() {
-        // Test that GSD is reasonable
+        // Source: Product Guide - "CH4/CO2 image product pixel size: 30 meters"
         assert_eq!(tanager1::GSD_METERS, 30.0);
         assert!(tanager1::GSD_METERS > 0.0);
+    }
+
+    #[test]
+    fn test_tanager1_geolocation_accuracy() {
+        // Source: Product Guide - "Plume geolocation accuracy (CE90): 50 meters"
+        assert_eq!(tanager1::GEOLOCATION_ACCURACY_M, 50.0);
+    }
+
+    #[test]
+    fn test_tanager1_spectral() {
+        // Source: Product Guide - "Spectral range: 400-2500 nm, Spectral sampling: 5 nm, FWHM: 5.5 nm"
+        assert_eq!(tanager1::SPECTRAL_RANGE_NM, (400.0, 2500.0));
+        assert_eq!(tanager1::SPECTRAL_SAMPLING_NM, 5.0);
+        assert_eq!(tanager1::SPECTRAL_FWHM_NM, 5.5);
+    }
+
+    #[test]
+    fn test_tanager1_snr() {
+        // Source: Product Guide - "Signal-to-noise @ 2200nm: 310 – 655"
+        assert_eq!(tanager1::SNR_2200NM_MIN, 310.0);
+        assert_eq!(tanager1::SNR_2200NM_MAX, 655.0);
     }
 
     #[test]

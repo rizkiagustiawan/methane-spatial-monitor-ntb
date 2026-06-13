@@ -5,10 +5,40 @@
 
 use std::sync::Arc;
 use sqlx::PgPool;
+use chrono::Timelike;
 use crate::errors::AppError;
 use crate::models::*;
 use crate::repositories::*;
 use crate::physics::*;
+
+/// Get region from coordinates
+/// Returns the nearest NTB region based on lat/lon
+pub fn get_region_from_coords(lon: f64, lat: f64) -> &'static str {
+    let zones = [
+        ("Lombok Barat", -8.6818, 116.1240),
+        ("Lombok Tengah", -8.7167, 116.2667),
+        ("Lombok Timur", -8.6500, 116.5333),
+        ("Lombok Utara", -8.3500, 116.4000),
+        ("Kota Mataram", -8.5833, 116.1167),
+        ("Sumbawa Barat", -8.7333, 116.8500),
+        ("Sumbawa", -8.5000, 117.4167),
+        ("Dompu", -8.5333, 118.4667),
+        ("Bima", -8.6500, 118.6167),
+        ("Kota Bima", -8.4667, 118.7167),
+    ];
+
+    let mut nearest_region = "Lombok Barat";
+    let mut min_dist = f64::MAX;
+
+    for (name, z_lat, z_lon) in zones {
+        let dist = ((lat - z_lat).powi(2) + (lon - z_lon).powi(2)).sqrt();
+        if dist < min_dist {
+            min_dist = dist;
+            nearest_region = name;
+        }
+    }
+    nearest_region
+}
 
 /// Methane service
 pub struct MethaneService {
@@ -175,7 +205,8 @@ impl PlumeAnalysisService {
         let wita_offset = chrono::FixedOffset::east_opt(8 * 3600).unwrap();
         
         for source in sources {
-            if source.emission_rate_kg_hr < tanager1::MIN_DETECTION_CONSERVATIVE_KG_HR {
+            // Source: Carbon Mapper Product Guide - "90-180 kg/hr (90% Probability of Detection)"
+            if source.emission_rate_kg_hr < tanager1::DETECTION_90PCT_KG_HR {
                 continue;
             }
             
@@ -291,8 +322,8 @@ impl PlumeAnalysisService {
                 plume_geojson,
                 terrain_blocked: false,
                 terrain_block_distance_m: None,
-                affected_zones,
                 exposure_alert: !affected_zones.is_empty(),
+                affected_zones,
             });
         }
         
