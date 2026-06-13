@@ -26,8 +26,8 @@ ehthumbs.db
 skills-lock.json
 
 # --- GEOSPATIAL & DOCUMENTS ---
-# File raster besar (kecuali yang dibutuhkan)
-# *.tif  # Uncomment jika tidak ingin track DEM file
+# File raster besar
+*.tif
 *.tiff
 
 # --- IDE & EDITOR ---
