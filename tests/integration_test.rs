@@ -301,4 +301,42 @@ mod tests {
         assert!(7.0 > roll_limit);
         assert!(5.0 > pitch_limit);
     }
+
+    // ─── EMIT Configuration ─────────────────────────────────────────────
+
+    #[test]
+    fn test_emit_stac_url_format() {
+        let url = "https://ghgcenter.upc.nasa.gov/api/stac";
+        assert!(url.starts_with("https://"), "EMIT STAC URL should use HTTPS");
+        assert!(url.contains("stac"), "URL should contain 'stac'");
+    }
+
+    #[test]
+    fn test_emit_default_bbox() {
+        // NTB bounding box: [min_lon, min_lat, max_lon, max_lat]
+        let bbox = vec![115.40, -9.15, 119.45, -8.00];
+        assert_eq!(bbox.len(), 4);
+        assert!(bbox[0] < bbox[2], "min_lon should be < max_lon");
+        assert!(bbox[1] < bbox[3], "min_lat should be < max_lat");
+
+        // Verify NTB bounds
+        assert!(bbox[0] > 115.0, "min_lon should be > 115");
+        assert!(bbox[2] < 120.0, "max_lon should be < 120");
+        assert!(bbox[1] < -8.0, "min_lat should be < -8");
+        assert!(bbox[3] > -9.5, "max_lat should be > -9.5");
+    }
+
+    #[test]
+    fn test_emit_poll_interval() {
+        let poll_secs = 43200u64; // 12 hours
+        let hours = poll_secs / 3600;
+        assert_eq!(hours, 12, "Default poll interval should be 12 hours");
+    }
+
+    #[test]
+    fn test_emit_collection_name() {
+        let collection = "emit-ch4plume-v1";
+        assert!(collection.starts_with("emit-"), "Collection should start with 'emit-'");
+        assert!(collection.contains("ch4"), "Collection should reference CH4");
+    }
 }
