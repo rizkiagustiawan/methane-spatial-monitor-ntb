@@ -245,6 +245,7 @@ async fn health_check(State(state): State<Arc<AppState>>) -> Result<impl IntoRes
 
     let last_bmkg = *state.last_bmkg_fetch.read().unwrap();
     let last_stac = *state.last_stac_fetch.read().unwrap();
+    let last_emit = *state.last_emit_fetch.read().unwrap();
 
     let health = HealthStatus {
         status: if db_status.status == "OK" && dem_status.status == "OK" { "HEALTHY".to_string() } else { "DEGRADED".to_string() },
@@ -252,7 +253,7 @@ async fn health_check(State(state): State<Arc<AppState>>) -> Result<impl IntoRes
         dem_file: dem_status,
         last_bmkg_fetch: last_bmkg,
         last_carbon_mapper_fetch: last_stac,
-        last_emit_fetch: None,
+        last_emit_fetch: last_emit,
         uptime_seconds: state.start_time.elapsed().as_secs(),
     };
 
