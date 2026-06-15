@@ -177,6 +177,7 @@ Proprietary - GeoESG A.E.C.O
 ## Acknowledgments
 
 - **Carbon Mapper** for Tanager-1 satellite data
+- **NASA EMIT** for methane plume data (ISS-based)
 - **BMKG** for weather data
 - **Open-Meteo** for weather forecast API
 - **ESA Copernicus** for Earth observation standards
