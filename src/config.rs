@@ -1,9 +1,9 @@
+use crate::errors::AppError;
 /// Configuration module with validation
-/// 
+///
 /// All configuration is validated at startup
 /// Invalid configuration = immediate crash (fail-fast)
 use serde::Deserialize;
-use crate::errors::AppError;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct AppConfig {
@@ -87,7 +87,7 @@ pub struct PhysicsConfig {
 impl AppConfig {
     pub fn from_env() -> Result<Self, AppError> {
         dotenvy::dotenv().ok();
-        
+
         let config = Self {
             database: DatabaseConfig {
                 url: std::env::var("DATABASE_URL")
@@ -106,8 +106,7 @@ impl AppConfig {
                     .map_err(|_| AppError::Config("Invalid DB_ACQUIRE_TIMEOUT".into()))?,
             },
             server: ServerConfig {
-                host: std::env::var("SERVER_HOST")
-                    .unwrap_or_else(|_| "0.0.0.0".into()),
+                host: std::env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".into()),
                 port: std::env::var("SERVER_PORT")
                     .unwrap_or_else(|_| "3000".into())
                     .parse()
@@ -119,8 +118,7 @@ impl AppConfig {
                     .collect(),
             },
             carbon_mapper: CarbonMapperConfig {
-                api_token: std::env::var("CARBON_MAPPER_TOKEN")
-                    .unwrap_or_default(),
+                api_token: std::env::var("CARBON_MAPPER_TOKEN").unwrap_or_default(),
                 base_url: std::env::var("CARBON_MAPPER_URL")
                     .unwrap_or_else(|_| "https://api.carbonmapper.org/api/v1/stac/search".into()),
                 bbox: vec![115.40, -9.15, 119.45, -8.00],
@@ -159,10 +157,8 @@ impl AppConfig {
                 poll_interval_secs: 3600,
             },
             telegram: TelegramConfig {
-                bot_token: std::env::var("TELEGRAM_BOT_TOKEN")
-                    .unwrap_or_default(),
-                chat_id: std::env::var("TELEGRAM_CHAT_ID")
-                    .unwrap_or_default(),
+                bot_token: std::env::var("TELEGRAM_BOT_TOKEN").unwrap_or_default(),
+                chat_id: std::env::var("TELEGRAM_CHAT_ID").unwrap_or_default(),
                 enabled: std::env::var("TELEGRAM_ENABLED")
                     .unwrap_or_else(|_| "true".into())
                     .parse()
@@ -177,11 +173,11 @@ impl AppConfig {
                 sensor_pitch_limit: 4.8,
             },
         };
-        
+
         config.validate()?;
         Ok(config)
     }
-    
+
     pub fn validate(&self) -> Result<(), AppError> {
         if self.database.url.is_empty() {
             return Err(AppError::Config("DATABASE_URL is empty".into()));
@@ -197,13 +193,21 @@ impl AppConfig {
         }
         if self.emit.enabled {
             if self.emit.base_url.is_empty() {
-                return Err(AppError::Config("EMIT_STAC_URL cannot be empty when EMIT is enabled".into()));
+                return Err(AppError::Config(
+                    "EMIT_STAC_URL cannot be empty when EMIT is enabled".into(),
+                ));
             }
-            if !self.emit.base_url.starts_with("http://") && !self.emit.base_url.starts_with("https://") {
-                return Err(AppError::Config("EMIT_STAC_URL must start with http:// or https://".into()));
+            if !self.emit.base_url.starts_with("http://")
+                && !self.emit.base_url.starts_with("https://")
+            {
+                return Err(AppError::Config(
+                    "EMIT_STAC_URL must start with http:// or https://".into(),
+                ));
             }
             if self.emit.bbox.len() != 4 {
-                return Err(AppError::Config("EMIT_BBOX must have exactly 4 values (min_lon,min_lat,max_lon,max_lat)".into()));
+                return Err(AppError::Config(
+                    "EMIT_BBOX must have exactly 4 values (min_lon,min_lat,max_lon,max_lat)".into(),
+                ));
             }
         }
         Ok(())
@@ -235,7 +239,7 @@ mod emit_tests {
             bbox: vec![115.40, -9.15, 119.45, -8.00],
             poll_interval_secs: 43200,
         };
-        
+
         assert!(config.enabled);
         assert!(config.base_url.starts_with("https://"));
         assert_eq!(config.bbox.len(), 4);
@@ -249,7 +253,7 @@ mod emit_tests {
             .split(',')
             .map(|s| s.trim().parse().unwrap_or(0.0))
             .collect();
-        
+
         assert_eq!(bbox.len(), 4);
         assert_eq!(bbox[0], 115.40);
         assert_eq!(bbox[1], -9.15);
@@ -264,7 +268,7 @@ mod emit_tests {
             .split(',')
             .map(|s| s.trim().parse().unwrap_or(0.0))
             .collect();
-        
+
         assert_ne!(bbox.len(), 4);
     }
 
@@ -274,7 +278,7 @@ mod emit_tests {
             "https://ghgcenter.upc.nasa.gov/api/stac",
             "http://localhost:8080/api/stac",
         ];
-        
+
         for url in valid_urls {
             assert!(
                 url.starts_with("http://") || url.starts_with("https://"),
@@ -282,13 +286,9 @@ mod emit_tests {
                 url
             );
         }
-        
-        let invalid_urls = vec![
-            "ftp://example.com",
-            "not-a-url",
-            "",
-        ];
-        
+
+        let invalid_urls = vec!["ftp://example.com", "not-a-url", ""];
+
         for url in invalid_urls {
             assert!(
                 !url.starts_with("http://") && !url.starts_with("https://"),
@@ -306,7 +306,7 @@ mod emit_tests {
             bbox: vec![115.40, -9.15, 119.45, -8.00],
             poll_interval_secs: 43200,
         };
-        
+
         assert!(config.poll_interval_secs >= 3600, "Poll interval too short");
         assert!(config.poll_interval_secs <= 86400, "Poll interval too long");
     }

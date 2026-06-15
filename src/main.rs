@@ -1,5 +1,5 @@
 use axum::{
-    extract::{State, Query},
+    extract::{Query, State},
     http::StatusCode,
     response::{Html, IntoResponse, Json as AxumJson},
     routing::get,
@@ -12,27 +12,29 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres, Row};
 use std::sync::Arc;
 use tokio::time::{self, Duration};
-use tracing::{error, info, warn};
-use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
+use tower_http::cors::{AllowOrigin, CorsLayer};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
-mod models;
-mod errors;
-mod stac;
-mod ws;
-mod physics;
 mod config;
+mod errors;
+mod models;
+mod physics;
 mod repositories;
 mod services;
+mod stac;
+mod ws;
 
-use models::*;
-use errors::AppError;
-use stac::{StacCollection, StacItem, StacLink, StacSearchRequest, StacSearchResponse, STAC_VERSION};
-use ws::WsState;
-use physics::*;
 use config::AppConfig;
+use errors::AppError;
+use models::*;
+use physics::*;
 use services::*;
+use stac::{
+    StacCollection, StacItem, StacLink, StacSearchRequest, StacSearchResponse, STAC_VERSION,
+};
+use ws::WsState;
 
 // ─── STATE & UTILS ───────────────────────────────────────────────────────────
 
@@ -104,7 +106,9 @@ async fn main() {
     let pool = PgPoolOptions::new()
         .max_connections(app_config.database.max_connections)
         .min_connections(app_config.database.min_connections)
-        .acquire_timeout(Duration::from_secs(app_config.database.acquire_timeout_secs))
+        .acquire_timeout(Duration::from_secs(
+            app_config.database.acquire_timeout_secs,
+        ))
         .connect(&app_config.database.url)
         .await
         .expect("Failed to connect to Postgres");
@@ -161,7 +165,8 @@ async fn main() {
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::predicate(|origin, _| {
             let origin_str = origin.as_bytes();
-            origin_str.starts_with(b"http://localhost") || origin_str.starts_with(b"http://127.0.0.1")
+            origin_str.starts_with(b"http://localhost")
+                || origin_str.starts_with(b"http://127.0.0.1")
         }))
         .allow_methods([axum::http::Method::GET]);
 
@@ -174,7 +179,10 @@ async fn main() {
     );
 
     let app = Router::new()
-        .route("/", get(|| async { Html(include_str!("../frontend/index.html")) }))
+        .route(
+            "/",
+            get(|| async { Html(include_str!("../frontend/index.html")) }),
+        )
         .route("/health", get(health_check))
         .route("/api/metrics", get(metrics_handler))
         .route("/api/stats", get(get_system_stats))
@@ -187,10 +195,18 @@ async fn main() {
         .route("/ws", get(ws::ws_handler))
         .route("/api/stac", get(stac_root))
         .route("/api/stac/collections", get(stac_collections))
-        .route("/api/stac/collections/methane-observations", get(stac_collection))
-        .route("/api/stac/collections/methane-observations/items", get(stac_items))
+        .route(
+            "/api/stac/collections/methane-observations",
+            get(stac_collection),
+        )
+        .route(
+            "/api/stac/collections/methane-observations/items",
+            get(stac_items),
+        )
         .route("/api/stac/search", get(stac_search))
-        .layer(GovernorLayer { config: governor_conf })
+        .layer(GovernorLayer {
+            config: governor_conf,
+        })
         .layer(cors)
         .with_state(shared_state.clone());
 
@@ -234,13 +250,25 @@ async fn shutdown_signal() {
 
 async fn health_check(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, AppError> {
     let db_status = match sqlx::query("SELECT 1").execute(&state.pool).await {
-        Ok(_) => ComponentHealth { status: "OK".to_string(), message: None },
-        Err(e) => ComponentHealth { status: "ERROR".to_string(), message: Some(e.to_string()) },
+        Ok(_) => ComponentHealth {
+            status: "OK".to_string(),
+            message: None,
+        },
+        Err(e) => ComponentHealth {
+            status: "ERROR".to_string(),
+            message: Some(e.to_string()),
+        },
     };
 
     let dem_status = match Dataset::open("ntb_dem.tif") {
-        Ok(_) => ComponentHealth { status: "OK".to_string(), message: None },
-        Err(e) => ComponentHealth { status: "ERROR".to_string(), message: Some(e.to_string()) },
+        Ok(_) => ComponentHealth {
+            status: "OK".to_string(),
+            message: None,
+        },
+        Err(e) => ComponentHealth {
+            status: "ERROR".to_string(),
+            message: Some(e.to_string()),
+        },
     };
 
     let last_bmkg = *state.last_bmkg_fetch.read().unwrap();
@@ -248,7 +276,11 @@ async fn health_check(State(state): State<Arc<AppState>>) -> Result<impl IntoRes
     let last_emit = *state.last_emit_fetch.read().unwrap();
 
     let health = HealthStatus {
-        status: if db_status.status == "OK" && dem_status.status == "OK" { "HEALTHY".to_string() } else { "DEGRADED".to_string() },
+        status: if db_status.status == "OK" && dem_status.status == "OK" {
+            "HEALTHY".to_string()
+        } else {
+            "DEGRADED".to_string()
+        },
         database: db_status,
         dem_file: dem_status,
         last_bmkg_fetch: last_bmkg,
@@ -289,8 +321,11 @@ async fn metrics_handler(State(state): State<Arc<AppState>>) -> String {
 }
 
 async fn get_system_stats(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    state.metrics.requests_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    
+    state
+        .metrics
+        .requests_total
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
     let plume_stats = sqlx::query(
         r#"SELECT 
             COUNT(*)::BIGINT as total_plumes,
@@ -300,7 +335,9 @@ async fn get_system_stats(State(state): State<Arc<AppState>>) -> impl IntoRespon
             MAX(emission_rate_kg_hr) as max_rate,
             MAX(recorded_at) as latest_plume_at
            FROM methane_observations"#,
-    ).fetch_optional(&state.pool).await;
+    )
+    .fetch_optional(&state.pool)
+    .await;
 
     let weather_stats = sqlx::query(
         r#"SELECT 
@@ -315,23 +352,28 @@ async fn get_system_stats(State(state): State<Arc<AppState>>) -> impl IntoRespon
             COUNT(*)::BIGINT as total_alerts,
             COUNT(*) FILTER (WHERE triggered_at > NOW() - INTERVAL '24 hours')::BIGINT as alerts_24h
            FROM evacuation_alerts"#,
-    ).fetch_optional(&state.pool).await;
+    )
+    .fetch_optional(&state.pool)
+    .await;
 
-    let active_zones: i64 = sqlx::query_scalar(
-        r#"SELECT COUNT(DISTINCT region)::BIGINT FROM populated_zones"#,
-    ).fetch_one(&state.pool).await.unwrap_or(5);
+    let active_zones: i64 =
+        sqlx::query_scalar(r#"SELECT COUNT(DISTINCT region)::BIGINT FROM populated_zones"#)
+            .fetch_one(&state.pool)
+            .await
+            .unwrap_or(5);
 
-    let (total_plumes, plumes_24h, plumes_7d, avg_rate, max_rate, latest_plume_at) = match plume_stats {
-        Ok(Some(ref row)) => (
-            row.get::<i64, _>("total_plumes"),
-            row.get::<i64, _>("plumes_24h"),
-            row.get::<i64, _>("plumes_7d"),
-            row.get::<Option<f64>, _>("avg_rate").unwrap_or(0.0),
-            row.get::<Option<f64>, _>("max_rate").unwrap_or(0.0),
-            row.get::<Option<DateTime<Utc>>, _>("latest_plume_at"),
-        ),
-        _ => (0, 0, 0, 0.0, 0.0, None),
-    };
+    let (total_plumes, plumes_24h, plumes_7d, avg_rate, max_rate, latest_plume_at) =
+        match plume_stats {
+            Ok(Some(ref row)) => (
+                row.get::<i64, _>("total_plumes"),
+                row.get::<i64, _>("plumes_24h"),
+                row.get::<i64, _>("plumes_7d"),
+                row.get::<Option<f64>, _>("avg_rate").unwrap_or(0.0),
+                row.get::<Option<f64>, _>("max_rate").unwrap_or(0.0),
+                row.get::<Option<DateTime<Utc>>, _>("latest_plume_at"),
+            ),
+            _ => (0, 0, 0, 0.0, 0.0, None),
+        };
 
     let (total_weather, weather_24h, latest_weather_at) = match weather_stats {
         Ok(Some(ref row)) => (
@@ -364,18 +406,24 @@ async fn get_system_stats(State(state): State<Arc<AppState>>) -> impl IntoRespon
         latest_plume_at,
         latest_weather_at,
     };
-    
+
     (StatusCode::OK, AxumJson(stats)).into_response()
 }
 
 async fn get_populated_zones(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    state.metrics.requests_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    
+    state
+        .metrics
+        .requests_total
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
     let records = sqlx::query(
         r#"SELECT zone_name, region, zone_type, ST_AsGeoJSON(geometry) as geom 
            FROM populated_zones"#,
-    ).fetch_all(&state.pool).await.unwrap_or_default();
-    
+    )
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
+
     let mut features = vec![];
     for r in records {
         let geom: String = r.get("geom");
@@ -389,49 +437,70 @@ async fn get_populated_zones(State(state): State<Arc<AppState>>) -> impl IntoRes
             "geometry": serde_json::from_str::<serde_json::Value>(&geom).unwrap_or_default()
         }));
     }
-    
+
     let geojson = json!({ "type": "FeatureCollection", "features": features });
     (StatusCode::OK, AxumJson(geojson)).into_response()
 }
 
-async fn get_methane_plumes(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, AppError> {
-    state.metrics.requests_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    
+async fn get_methane_plumes(
+    State(state): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, AppError> {
+    state
+        .metrics
+        .requests_total
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
     let records = sqlx::query(
         r#"SELECT recorded_at, emission_rate_kg_hr, ST_AsGeoJSON(location) as geometry,
            ST_AsGeoJSON(plume_geometry) as plume_geometry_json, source
          FROM methane_observations ORDER BY recorded_at DESC LIMIT 100"#,
-    ).fetch_all(&state.pool).await?;
-    
-    let plumes: Vec<MethanePlumeResponse> = records.into_iter().map(|row| {
-        let geometry_str: String = row.get("geometry");
-        let plume_geometry_json: Option<String> = row.get("plume_geometry_json");
-        MethanePlumeResponse {
-            recorded_at: row.get("recorded_at"),
-            emission_rate_kg_hr: row.get("emission_rate_kg_hr"),
-            geometry: serde_json::from_str(&geometry_str).unwrap_or_default(),
-            plume_footprint: plume_geometry_json.and_then(|g: String| serde_json::from_str(&g).ok()),
-            source: row.get("source"),
-        }
-    }).collect();
-    
+    )
+    .fetch_all(&state.pool)
+    .await?;
+
+    let plumes: Vec<MethanePlumeResponse> = records
+        .into_iter()
+        .map(|row| {
+            let geometry_str: String = row.get("geometry");
+            let plume_geometry_json: Option<String> = row.get("plume_geometry_json");
+            MethanePlumeResponse {
+                recorded_at: row.get("recorded_at"),
+                emission_rate_kg_hr: row.get("emission_rate_kg_hr"),
+                geometry: serde_json::from_str(&geometry_str).unwrap_or_default(),
+                plume_footprint: plume_geometry_json
+                    .and_then(|g: String| serde_json::from_str(&g).ok()),
+                source: row.get("source"),
+            }
+        })
+        .collect();
+
     Ok((StatusCode::OK, AxumJson(json!(plumes))))
 }
 
-async fn get_latest_weather(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, AppError> {
-    state.metrics.requests_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    
+async fn get_latest_weather(
+    State(state): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, AppError> {
+    state
+        .metrics
+        .requests_total
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
     let records = sqlx::query_as::<_, WeatherObservation>(
         "SELECT recorded_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, data_source
          FROM weather_observations ORDER BY recorded_at DESC LIMIT 10",
     ).fetch_all(&state.pool).await?;
-    
+
     Ok((StatusCode::OK, AxumJson(json!(records))))
 }
 
-async fn get_weather_forecast(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, AppError> {
-    state.metrics.requests_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    
+async fn get_weather_forecast(
+    State(state): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, AppError> {
+    state
+        .metrics
+        .requests_total
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
     let records = sqlx::query(
         r#"SELECT forecast_at, valid_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, data_source
            FROM weather_forecasts
@@ -439,20 +508,23 @@ async fn get_weather_forecast(State(state): State<Arc<AppState>>) -> Result<impl
            ORDER BY valid_at ASC
            LIMIT 48"#,
     ).fetch_all(&state.pool).await?;
-    
-    let forecasts: Vec<serde_json::Value> = records.into_iter().map(|r| {
-        json!({
-            "forecast_at": r.get::<DateTime<Utc>, _>("forecast_at"),
-            "valid_at": r.get::<DateTime<Utc>, _>("valid_at"),
-            "area_id": r.get::<String, _>("area_id"),
-            "wind_speed_ms": r.get::<Option<f64>, _>("wind_speed_ms"),
-            "wind_direction_deg": r.get::<Option<f64>, _>("wind_direction_deg"),
-            "humidity_percent": r.get::<Option<f64>, _>("humidity_percent"),
-            "temperature_c": r.get::<Option<f64>, _>("temperature_c"),
-            "data_source": r.get::<Option<String>, _>("data_source").unwrap_or_default()
+
+    let forecasts: Vec<serde_json::Value> = records
+        .into_iter()
+        .map(|r| {
+            json!({
+                "forecast_at": r.get::<DateTime<Utc>, _>("forecast_at"),
+                "valid_at": r.get::<DateTime<Utc>, _>("valid_at"),
+                "area_id": r.get::<String, _>("area_id"),
+                "wind_speed_ms": r.get::<Option<f64>, _>("wind_speed_ms"),
+                "wind_direction_deg": r.get::<Option<f64>, _>("wind_direction_deg"),
+                "humidity_percent": r.get::<Option<f64>, _>("humidity_percent"),
+                "temperature_c": r.get::<Option<f64>, _>("temperature_c"),
+                "data_source": r.get::<Option<String>, _>("data_source").unwrap_or_default()
+            })
         })
-    }).collect();
-    
+        .collect();
+
     Ok((StatusCode::OK, AxumJson(json!(forecasts))))
 }
 
@@ -484,14 +556,20 @@ async fn stac_collections() -> Result<impl IntoResponse, AppError> {
 }
 
 async fn stac_collection() -> Result<impl IntoResponse, AppError> {
-    Ok((StatusCode::OK, AxumJson(json!(StacCollection::methane_observations()))))
+    Ok((
+        StatusCode::OK,
+        AxumJson(json!(StacCollection::methane_observations())),
+    ))
 }
 
 async fn stac_items(
     State(state): State<Arc<AppState>>,
     Query(params): Query<StacSearchRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    state.metrics.requests_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    state
+        .metrics
+        .requests_total
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let limit = params.limit.unwrap_or(100).min(1000) as i64;
     let items = fetch_stac_items(&state.pool, limit).await?;
     let count = items.len() as u32;
@@ -504,7 +582,10 @@ async fn stac_items(
             r#type: Some("application/geo+json".to_string()),
             title: None,
         }],
-        context: Some(stac::StacSearchContext { returned: count, matched: None }),
+        context: Some(stac::StacSearchContext {
+            returned: count,
+            matched: None,
+        }),
     };
     Ok((StatusCode::OK, AxumJson(json!(response))))
 }
@@ -513,7 +594,10 @@ async fn stac_search(
     State(state): State<Arc<AppState>>,
     Query(params): Query<StacSearchRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    state.metrics.requests_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    state
+        .metrics
+        .requests_total
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let limit = params.limit.unwrap_or(100).min(1000) as i64;
     let items = fetch_stac_items(&state.pool, limit).await?;
     let count = items.len() as u32;
@@ -526,7 +610,10 @@ async fn stac_search(
             r#type: Some("application/geo+json".to_string()),
             title: None,
         }],
-        context: Some(stac::StacSearchContext { returned: count, matched: None }),
+        context: Some(stac::StacSearchContext {
+            returned: count,
+            matched: None,
+        }),
     };
     Ok((StatusCode::OK, AxumJson(json!(response))))
 }
@@ -545,25 +632,29 @@ async fn fetch_stac_items(pool: &Pool<Postgres>, limit: i64) -> Result<Vec<StacI
     .fetch_all(pool)
     .await?;
 
-    let items: Vec<StacItem> = records.into_iter().map(|row| {
-        let geometry_str: String = row.get("geometry");
-        let geometry: serde_json::Value = serde_json::from_str(&geometry_str).unwrap_or_default();
-        let lon: Option<f64> = row.get("lon");
-        let lat: Option<f64> = row.get("lat");
-        let lon = lon.unwrap_or(0.0);
-        let lat = lat.unwrap_or(0.0);
-        let bbox = vec![lon - 0.01, lat - 0.01, lon + 0.01, lat + 0.01];
-        let source: Option<String> = row.get("source");
-        
-        StacItem::from_methane_observation(
-            row.get("id"),
-            row.get("recorded_at"),
-            row.get("emission_rate_kg_hr"),
-            geometry,
-            bbox,
-            &source.unwrap_or_else(|| "unknown".to_string()),
-        )
-    }).collect();
+    let items: Vec<StacItem> = records
+        .into_iter()
+        .map(|row| {
+            let geometry_str: String = row.get("geometry");
+            let geometry: serde_json::Value =
+                serde_json::from_str(&geometry_str).unwrap_or_default();
+            let lon: Option<f64> = row.get("lon");
+            let lat: Option<f64> = row.get("lat");
+            let lon = lon.unwrap_or(0.0);
+            let lat = lat.unwrap_or(0.0);
+            let bbox = vec![lon - 0.01, lat - 0.01, lon + 0.01, lat + 0.01];
+            let source: Option<String> = row.get("source");
+
+            StacItem::from_methane_observation(
+                row.get("id"),
+                row.get("recorded_at"),
+                row.get("emission_rate_kg_hr"),
+                geometry,
+                bbox,
+                &source.unwrap_or_else(|| "unknown".to_string()),
+            )
+        })
+        .collect();
 
     Ok(items)
 }
@@ -572,20 +663,44 @@ async fn fetch_stac_items(pool: &Pool<Postgres>, limit: i64) -> Result<Vec<StacI
 
 fn get_pasquill_stability_class(wind_speed_ms: f64, is_daytime: bool) -> char {
     if is_daytime {
-        if wind_speed_ms < 3.0 { 'A' } else if wind_speed_ms < 5.0 { 'B' } else { 'C' }
-    } else if wind_speed_ms < 3.0 { 'F' } else if wind_speed_ms < 5.0 { 'E' } else { 'D' }
+        if wind_speed_ms < 3.0 {
+            'A'
+        } else if wind_speed_ms < 5.0 {
+            'B'
+        } else {
+            'C'
+        }
+    } else if wind_speed_ms < 3.0 {
+        'F'
+    } else if wind_speed_ms < 5.0 {
+        'E'
+    } else {
+        'D'
+    }
 }
 
 fn get_plume_spread_angle(stability_class: char) -> f64 {
-    match stability_class { 'A' => 25.0, 'B' => 20.0, 'C' => 15.0, 'D' => 12.5, 'E' => 8.75, 'F' => 5.0, _ => 12.5 }
+    match stability_class {
+        'A' => 25.0,
+        'B' => 20.0,
+        'C' => 15.0,
+        'D' => 12.5,
+        'E' => 8.75,
+        'F' => 5.0,
+        _ => 12.5,
+    }
 }
 
 fn calc_gaussian_concentration_1km(emission_kg_hr: f64, ws: f64, stability: char) -> f64 {
     let q_g_s = emission_kg_hr * 1000.0 / 3600.0;
     let (sy, sz) = match stability {
-        'A' => (210.0, 450.0), 'B' => (155.0, 110.0), 'C' => (105.0, 61.0),
-        'D' => (68.0, 31.0), 'E' => (50.0, 21.0), 'F' => (34.0, 11.0),
-        _ => (68.0, 31.0)
+        'A' => (210.0, 450.0),
+        'B' => (155.0, 110.0),
+        'C' => (105.0, 61.0),
+        'D' => (68.0, 31.0),
+        'E' => (50.0, 21.0),
+        'F' => (34.0, 11.0),
+        _ => (68.0, 31.0),
     };
     let ws_safe = if ws < 1.0 { 1.0 } else { ws };
     let c_g_m3 = q_g_s / (std::f64::consts::PI * ws_safe * sy * sz);
@@ -594,8 +709,11 @@ fn calc_gaussian_concentration_1km(emission_kg_hr: f64, ws: f64, stability: char
 }
 
 async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    state.metrics.requests_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    
+    state
+        .metrics
+        .requests_total
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
     let active_sources = match sqlx::query(
         r#"SELECT id, ST_X(location::geometry) as lon, ST_Y(location::geometry) as lat, emission_rate_kg_hr
            FROM methane_observations WHERE recorded_at > NOW() - INTERVAL '24 hours'"#,
@@ -608,7 +726,11 @@ async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl 
     };
 
     if active_sources.is_empty() {
-        return (StatusCode::OK, AxumJson(json!(Vec::<serde_json::Value>::new()))).into_response();
+        return (
+            StatusCode::OK,
+            AxumJson(json!(Vec::<serde_json::Value>::new())),
+        )
+            .into_response();
     }
 
     let mut predictions = Vec::new();
@@ -616,8 +738,14 @@ async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl 
     let now_wita = Utc::now().with_timezone(&wita_offset);
     let is_daytime = now_wita.hour() >= 6 && now_wita.hour() < 18;
 
-    let sensor_roll = std::env::var("SENSOR_ROLL_DEG").ok().and_then(|v| v.parse::<f64>().ok()).unwrap_or(5.0);
-    let sensor_pitch = std::env::var("SENSOR_PITCH_DEG").ok().and_then(|v| v.parse::<f64>().ok()).unwrap_or(2.0);
+    let sensor_roll = std::env::var("SENSOR_ROLL_DEG")
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok())
+        .unwrap_or(5.0);
+    let sensor_pitch = std::env::var("SENSOR_PITCH_DEG")
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok())
+        .unwrap_or(2.0);
     let is_smeared = sensor_roll > 6.85 || sensor_pitch > 4.8;
 
     for source in active_sources {
@@ -629,7 +757,9 @@ async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl 
         let region = get_region_from_coords(lon, lat);
         let emission_rate: f64 = source.get("emission_rate_kg_hr");
 
-        if emission_rate < tanager1::DETECTION_CONSERVATIVE_KG_HR { continue; }
+        if emission_rate < tanager1::DETECTION_CONSERVATIVE_KG_HR {
+            continue;
+        }
 
         let weather = sqlx::query(
             r#"SELECT wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c
@@ -638,9 +768,14 @@ async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl 
                ORDER BY recorded_at DESC LIMIT 1"#,
         )
         .bind(region)
-        .fetch_optional(&state.pool).await.unwrap_or_default();
+        .fetch_optional(&state.pool)
+        .await
+        .unwrap_or_default();
 
-        let w = match weather { Some(w) => w, None => continue };
+        let w = match weather {
+            Some(w) => w,
+            None => continue,
+        };
 
         let ws: Option<f64> = w.get("wind_speed_ms");
         let wd: Option<f64> = w.get("wind_direction_deg");
@@ -652,32 +787,36 @@ async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl 
         let temp = temp.unwrap_or(25.0);
 
         let mut distance = ws * 3600.0;
-        if hum > 85.0 { distance *= 0.60; }
+        if hum > 85.0 {
+            distance *= 0.60;
+        }
 
         let stability = get_pasquill_stability_class(ws, is_daytime);
         let mut spread_angle = get_plume_spread_angle(stability);
 
         let temp_k: f64 = temp + 273.15;
         let baseline_k: f64 = 308.15;
-        if temp_k > baseline_k { spread_angle *= (baseline_k / temp_k).powi(4); }
+        if temp_k > baseline_k {
+            spread_angle *= (baseline_k / temp_k).powi(4);
+        }
 
         let conc_1km = calc_gaussian_concentration_1km(emission_rate, ws, stability);
 
         let origin_elev = get_elevation_at_point(lon, lat).unwrap_or(0.0);
         let mut terrain_blocked = false;
         let mut block_dist = None;
-        
+
         for i in 1..=10 {
             let step_dist = distance * (i as f64 / 10.0);
             let dx = (wd + 180.0).to_radians().sin() * (step_dist / 111320.0);
             let dy = (wd + 180.0).to_radians().cos() * (step_dist / 110540.0);
             if let Some(elev) = get_elevation_at_point(lon + dx, lat + dy) {
-                 if elev > origin_elev + 15.0 {
-                     terrain_blocked = true;
-                     block_dist = Some(step_dist);
-                     distance = step_dist;
-                     break;
-                 }
+                if elev > origin_elev + 15.0 {
+                    terrain_blocked = true;
+                    block_dist = Some(step_dist);
+                    distance = step_dist;
+                    break;
+                }
             }
         }
 
@@ -697,19 +836,22 @@ async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl 
 
         if let Some(rec) = geom_rec {
             let json_str: String = rec.get("json");
-            let geojson_val: serde_json::Value = serde_json::from_str(&json_str).unwrap_or_default();
-            
+            let geojson_val: serde_json::Value =
+                serde_json::from_str(&json_str).unwrap_or_default();
+
             let affected = sqlx::query(
                 r#"SELECT zone_name, region, zone_type, population_estimate, is_volcanic_zone
                    FROM populated_zones 
                    WHERE ST_Intersects(geometry, ST_GeomFromGeoJSON($1))"#,
             )
             .bind(&json_str)
-            .fetch_all(&state.pool).await.unwrap_or_default();
-            
+            .fetch_all(&state.pool)
+            .await
+            .unwrap_or_default();
+
             let exposure_alert = !affected.is_empty();
             let mut affected_zones = Vec::new();
-            
+
             for zone in &affected {
                 let zone_name: String = zone.get("zone_name");
                 let region_str: String = zone.get("region");
@@ -729,16 +871,22 @@ async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl 
                     let client = state.http_client.clone();
                     let token = state.config.telegram.bot_token.clone();
                     let chat_id = state.config.telegram.chat_id.clone();
-                    tokio::spawn(async move { send_telegram_alert(&client, &msg, &token, &chat_id).await; });
+                    tokio::spawn(async move {
+                        send_telegram_alert(&client, &msg, &token, &chat_id).await;
+                    });
 
                     ws::broadcast_alert(
                         &state.ws_state.tx,
                         zone_name.clone(),
                         region_str.clone(),
                         emission_rate,
-                        format!("Evacuation alert: {} ({}) - {:.1} ppm at 1km", zone_name, region_str, conc_1km),
-                    ).await;
-                    
+                        format!(
+                            "Evacuation alert: {} ({}) - {:.1} ppm at 1km",
+                            zone_name, region_str, conc_1km
+                        ),
+                    )
+                    .await;
+
                     let _ = sqlx::query(
                         "INSERT INTO evacuation_alerts (region, zone_name, emission_rate_kg_hr, wind_speed_ms, wind_direction_deg, concentration_ppm, stability_class) VALUES ($1, $2, $3, $4, $5, $6, $7)",
                     )
@@ -767,13 +915,16 @@ async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl 
             }));
         }
     }
-    
+
     (StatusCode::OK, AxumJson(json!(predictions))).into_response()
 }
 
 async fn get_plume_analysis(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    state.metrics.requests_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    
+    state
+        .metrics
+        .requests_total
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
     let active_sources = match sqlx::query(
         r#"SELECT id, recorded_at, emission_rate_kg_hr, 
            ST_X(location::geometry) as lon, ST_Y(location::geometry) as lat,
@@ -781,16 +932,27 @@ async fn get_plume_analysis(State(state): State<Arc<AppState>>) -> impl IntoResp
            FROM methane_observations 
            WHERE recorded_at > NOW() - INTERVAL '24 hours'
            ORDER BY recorded_at DESC"#,
-    ).fetch_all(&state.pool).await {
+    )
+    .fetch_all(&state.pool)
+    .await
+    {
         Ok(s) => s,
         Err(e) => {
             error!("Database error fetching sources: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, AxumJson(json!({"error": "DB Error"}))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                AxumJson(json!({"error": "DB Error"})),
+            )
+                .into_response();
         }
     };
 
     if active_sources.is_empty() {
-        return (StatusCode::OK, AxumJson(json!(Vec::<serde_json::Value>::new()))).into_response();
+        return (
+            StatusCode::OK,
+            AxumJson(json!(Vec::<serde_json::Value>::new())),
+        )
+            .into_response();
     }
 
     let mut analyses = Vec::new();
@@ -808,7 +970,9 @@ async fn get_plume_analysis(State(state): State<Arc<AppState>>) -> impl IntoResp
         let plume_geometry_json: Option<String> = source.get("plume_geometry_json");
         let source_name: Option<String> = source.get("source");
 
-        if emission_rate < tanager1::DETECTION_90PCT_KG_HR { continue; }
+        if emission_rate < tanager1::DETECTION_90PCT_KG_HR {
+            continue;
+        }
 
         let mut observed_affected_zones = Vec::new();
         let mut observed_exposure_alert = false;
@@ -820,7 +984,9 @@ async fn get_plume_analysis(State(state): State<Arc<AppState>>) -> impl IntoResp
                    WHERE ST_Intersects(geometry, ST_GeomFromGeoJSON($1))"#,
             )
             .bind(plume_json)
-            .fetch_all(&state.pool).await.unwrap_or_default();
+            .fetch_all(&state.pool)
+            .await
+            .unwrap_or_default();
 
             observed_exposure_alert = !affected.is_empty();
             for zone in &affected {
@@ -835,7 +1001,8 @@ async fn get_plume_analysis(State(state): State<Arc<AppState>>) -> impl IntoResp
         }
 
         let observed = ObservedPlume {
-            plume_footprint: plume_geometry_json.and_then(|g: String| serde_json::from_str(&g).ok()),
+            plume_footprint: plume_geometry_json
+                .and_then(|g: String| serde_json::from_str(&g).ok()),
             affected_zones: observed_affected_zones,
             exposure_alert: observed_exposure_alert,
             source: source_name.unwrap_or_else(|| "unknown".to_string()),
@@ -848,11 +1015,19 @@ async fn get_plume_analysis(State(state): State<Arc<AppState>>) -> impl IntoResp
                ORDER BY valid_at ASC"#,
         )
         .bind(region)
-        .fetch_all(&state.pool).await.unwrap_or_default();
+        .fetch_all(&state.pool)
+        .await
+        .unwrap_or_default();
 
         let mut forecasted_plumes = Vec::new();
-        let sensor_roll = std::env::var("SENSOR_ROLL_DEG").ok().and_then(|v| v.parse::<f64>().ok()).unwrap_or(5.0);
-        let sensor_pitch = std::env::var("SENSOR_PITCH_DEG").ok().and_then(|v| v.parse::<f64>().ok()).unwrap_or(2.0);
+        let sensor_roll = std::env::var("SENSOR_ROLL_DEG")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+            .unwrap_or(5.0);
+        let sensor_pitch = std::env::var("SENSOR_PITCH_DEG")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+            .unwrap_or(2.0);
         let _is_smeared = sensor_roll > 6.85 || sensor_pitch > 4.8;
 
         for fc in &forecasts {
@@ -866,17 +1041,22 @@ async fn get_plume_analysis(State(state): State<Arc<AppState>>) -> impl IntoResp
             let hum = hum.unwrap_or(0.0);
             let temp = temp.unwrap_or(25.0);
 
-            let is_daytime = valid_at.with_timezone(&wita_offset).hour() >= 6 && valid_at.with_timezone(&wita_offset).hour() < 18;
+            let is_daytime = valid_at.with_timezone(&wita_offset).hour() >= 6
+                && valid_at.with_timezone(&wita_offset).hour() < 18;
 
             let mut distance = ws * 3600.0;
-            if hum > 85.0 { distance *= 0.60; }
+            if hum > 85.0 {
+                distance *= 0.60;
+            }
 
             let stability = get_pasquill_stability_class(ws, is_daytime);
             let mut spread_angle = get_plume_spread_angle(stability);
 
             let temp_k: f64 = temp + 273.15;
             let baseline_k: f64 = 308.15;
-            if temp_k > baseline_k { spread_angle *= (baseline_k / temp_k).powi(4); }
+            if temp_k > baseline_k {
+                spread_angle *= (baseline_k / temp_k).powi(4);
+            }
 
             let conc_1km = calc_gaussian_concentration_1km(emission_rate, ws, stability);
 
@@ -914,7 +1094,8 @@ async fn get_plume_analysis(State(state): State<Arc<AppState>>) -> impl IntoResp
 
             if let Some(rec) = geom_rec {
                 let json_str: String = rec.get("json");
-                let geojson_val: serde_json::Value = serde_json::from_str(&json_str).unwrap_or_default();
+                let geojson_val: serde_json::Value =
+                    serde_json::from_str(&json_str).unwrap_or_default();
 
                 let affected = sqlx::query(
                     r#"SELECT zone_name, region, zone_type, population_estimate, is_volcanic_zone
@@ -922,7 +1103,9 @@ async fn get_plume_analysis(State(state): State<Arc<AppState>>) -> impl IntoResp
                        WHERE ST_Intersects(geometry, ST_GeomFromGeoJSON($1))"#,
                 )
                 .bind(&json_str)
-                .fetch_all(&state.pool).await.unwrap_or_default();
+                .fetch_all(&state.pool)
+                .await
+                .unwrap_or_default();
 
                 let exposure_alert = !affected.is_empty();
                 let mut affected_zones = Vec::new();
@@ -946,7 +1129,9 @@ async fn get_plume_analysis(State(state): State<Arc<AppState>>) -> impl IntoResp
                         let client = state.http_client.clone();
                         let token = state.config.telegram.bot_token.clone();
                         let chat_id = state.config.telegram.chat_id.clone();
-                        tokio::spawn(async move { send_telegram_alert(&client, &msg, &token, &chat_id).await; });
+                        tokio::spawn(async move {
+                            send_telegram_alert(&client, &msg, &token, &chat_id).await;
+                        });
                     }
                 }
 
@@ -984,17 +1169,24 @@ async fn get_plume_analysis(State(state): State<Arc<AppState>>) -> impl IntoResp
 // ─── BACKGROUND TASKS ────────────────────────────────────────────────────────
 
 async fn carbon_mapper_tracker_task(state: Arc<AppState>) {
-    let mut interval = time::interval(Duration::from_secs(state.config.carbon_mapper.poll_interval_secs)); 
+    let mut interval = time::interval(Duration::from_secs(
+        state.config.carbon_mapper.poll_interval_secs,
+    ));
     let api_token = &state.config.carbon_mapper.api_token;
-    if api_token.is_empty() { return; }
+    if api_token.is_empty() {
+        return;
+    }
 
     loop {
         interval.tick().await;
-        state.metrics.carbon_mapper_fetches.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        
+        state
+            .metrics
+            .carbon_mapper_fetches
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         let mut next_url = Some(state.config.carbon_mapper.base_url.clone());
         let mut cycle_errors = 0u64;
-        
+
         while let Some(url) = next_url.clone() {
             let payload = json!({
                 "bbox": state.config.carbon_mapper.bbox,
@@ -1002,32 +1194,57 @@ async fn carbon_mapper_tracker_task(state: Arc<AppState>) {
                 "limit": 100
             });
 
-            match state.http_client.post(&url).header("X-API-KEY", api_token.as_str()).json(&payload).send().await {
+            match state
+                .http_client
+                .post(&url)
+                .header("X-API-KEY", api_token.as_str())
+                .json(&payload)
+                .send()
+                .await
+            {
                 Ok(res) if res.status().is_success() => {
                     if let Ok(stac) = res.json::<StacResponse>().await {
                         *state.last_stac_fetch.write().unwrap() = Some(Utc::now());
-                        
+
                         for feature in stac.features {
-                            if feature.properties.emission_rate_kg_hr <= 0.0 { continue; }
-                            let dt = chrono::DateTime::parse_from_rfc3339(&feature.properties.datetime).unwrap().with_timezone(&Utc);
+                            if feature.properties.emission_rate_kg_hr <= 0.0 {
+                                continue;
+                            }
+                            let dt =
+                                chrono::DateTime::parse_from_rfc3339(&feature.properties.datetime)
+                                    .unwrap()
+                                    .with_timezone(&Utc);
                             let geom = serde_json::to_string(&feature.geometry).unwrap();
-                            
-                            let (lon, lat) = if let Some(coords) = feature.geometry.get("coordinates") {
-                                if let Some(arr) = coords.as_array() {
-                                    if arr.len() >= 2 {
-                                        (arr[0].as_f64().unwrap_or(0.0), arr[1].as_f64().unwrap_or(0.0))
-                                    } else { (0.0, 0.0) }
-                                } else { (0.0, 0.0) }
-                            } else { (0.0, 0.0) };
+
+                            let (lon, lat) =
+                                if let Some(coords) = feature.geometry.get("coordinates") {
+                                    if let Some(arr) = coords.as_array() {
+                                        if arr.len() >= 2 {
+                                            (
+                                                arr[0].as_f64().unwrap_or(0.0),
+                                                arr[1].as_f64().unwrap_or(0.0),
+                                            )
+                                        } else {
+                                            (0.0, 0.0)
+                                        }
+                                    } else {
+                                        (0.0, 0.0)
+                                    }
+                                } else {
+                                    (0.0, 0.0)
+                                };
 
                             let res = sqlx::query(
                                 "INSERT INTO methane_observations (recorded_at, emission_rate_kg_hr, location, plume_geometry, source) VALUES ($1, $2, ST_Centroid(ST_GeomFromGeoJSON($3)), ST_GeomFromGeoJSON($3), 'carbon_mapper') ON CONFLICT (recorded_at, emission_rate_kg_hr) DO NOTHING",
                             )
                             .bind(dt).bind(feature.properties.emission_rate_kg_hr).bind(&geom)
                             .execute(&state.pool).await;
-                            
+
                             if res.is_ok() && res.unwrap().rows_affected() > 0 {
-                                state.metrics.plumes_ingested.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                state
+                                    .metrics
+                                    .plumes_ingested
+                                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                                 ws::broadcast_plume_update(
                                     &state.ws_state.tx,
                                     format!("{}", Uuid::new_v4()),
@@ -1035,27 +1252,40 @@ async fn carbon_mapper_tracker_task(state: Arc<AppState>) {
                                     lat,
                                     lon,
                                     dt.to_rfc3339(),
-                                ).await;
+                                )
+                                .await;
                             }
                         }
-                        
-                        next_url = stac.links.iter().find(|l| l.rel == "next").map(|l| l.href.clone());
-                    } else { next_url = None; }
+
+                        next_url = stac
+                            .links
+                            .iter()
+                            .find(|l| l.rel == "next")
+                            .map(|l| l.href.clone());
+                    } else {
+                        next_url = None;
+                    }
                 }
                 _ => {
-                    state.metrics.carbon_mapper_errors.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    state
+                        .metrics
+                        .carbon_mapper_errors
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     cycle_errors += 1;
                     next_url = None;
+                }
+            }
+
+            // If Carbon Mapper had errors this cycle, log for EMIT fallback
+            if cycle_errors > 0 {
+                info!(
+                    "Carbon Mapper had {} errors this cycle, EMIT fallback active",
+                    cycle_errors
+                );
+                cycle_errors = 0;
             }
         }
-        
-        // If Carbon Mapper had errors this cycle, log for EMIT fallback
-        if cycle_errors > 0 {
-            info!("Carbon Mapper had {} errors this cycle, EMIT fallback active", cycle_errors);
-            cycle_errors = 0;
-        }
     }
-}
 }
 
 async fn emit_tracker_task(state: Arc<AppState>) {
@@ -1068,11 +1298,17 @@ async fn emit_tracker_task(state: Arc<AppState>) {
     let bbox = &state.config.emit.bbox;
     let collection = "emit-ch4plume-v1";
 
-    info!("EMIT fallback task started (poll: {}s)", state.config.emit.poll_interval_secs);
+    info!(
+        "EMIT fallback task started (poll: {}s)",
+        state.config.emit.poll_interval_secs
+    );
 
     loop {
         interval.tick().await;
-        state.metrics.emit_fetches.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        state
+            .metrics
+            .emit_fetches
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         let base_search_url = format!("{}/search", state.config.emit.base_url);
         let mut next_url = Some(base_search_url.clone());
@@ -1096,22 +1332,36 @@ async fn emit_tracker_task(state: Arc<AppState>) {
                                 _ => continue,
                             };
 
-                            let dt = match chrono::DateTime::parse_from_rfc3339(&feature.properties.datetime) {
+                            let dt = match chrono::DateTime::parse_from_rfc3339(
+                                &feature.properties.datetime,
+                            ) {
                                 Ok(dt) => dt.with_timezone(&Utc),
                                 Err(_) => continue,
                             };
 
                             let geom = serde_json::to_string(&feature.geometry).unwrap_or_default();
 
-                            let (lon, lat) = if let Some(coords) = feature.geometry.get("coordinates") {
-                                if let Some(arr) = coords.as_array() {
-                                    if arr.len() >= 2 {
-                                        (arr[0].as_f64().unwrap_or(0.0), arr[1].as_f64().unwrap_or(0.0))
-                                    } else { (0.0, 0.0) }
-                                } else { (0.0, 0.0) }
-                            } else { (0.0, 0.0) };
+                            let (lon, lat) =
+                                if let Some(coords) = feature.geometry.get("coordinates") {
+                                    if let Some(arr) = coords.as_array() {
+                                        if arr.len() >= 2 {
+                                            (
+                                                arr[0].as_f64().unwrap_or(0.0),
+                                                arr[1].as_f64().unwrap_or(0.0),
+                                            )
+                                        } else {
+                                            (0.0, 0.0)
+                                        }
+                                    } else {
+                                        (0.0, 0.0)
+                                    }
+                                } else {
+                                    (0.0, 0.0)
+                                };
 
-                            let plume_id = feature.properties.ch4_plume_id
+                            let plume_id = feature
+                                .properties
+                                .ch4_plume_id
                                 .unwrap_or_else(|| format!("emit-{}", Uuid::new_v4()));
 
                             let res = sqlx::query(
@@ -1122,7 +1372,10 @@ async fn emit_tracker_task(state: Arc<AppState>) {
 
                             if let Ok(result) = res {
                                 if result.rows_affected() > 0 {
-                                    state.metrics.emit_plumes_ingested.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                    state
+                                        .metrics
+                                        .emit_plumes_ingested
+                                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                                     ws::broadcast_plume_update(
                                         &state.ws_state.tx,
                                         plume_id,
@@ -1130,12 +1383,15 @@ async fn emit_tracker_task(state: Arc<AppState>) {
                                         lat,
                                         lon,
                                         dt.to_rfc3339(),
-                                    ).await;
+                                    )
+                                    .await;
                                 }
                             }
                         }
 
-                        next_url = stac.links.iter()
+                        next_url = stac
+                            .links
+                            .iter()
                             .find(|l| l.rel == "next")
                             .map(|l| l.href.clone());
                     } else {
@@ -1143,7 +1399,10 @@ async fn emit_tracker_task(state: Arc<AppState>) {
                     }
                 }
                 _ => {
-                    state.metrics.emit_errors.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    state
+                        .metrics
+                        .emit_errors
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     warn!("EMIT fetch failed for: {}", url);
                 }
             }
@@ -1152,7 +1411,7 @@ async fn emit_tracker_task(state: Arc<AppState>) {
 }
 
 async fn bmkg_tracker_task(state: Arc<AppState>) {
-    let mut interval = time::interval(Duration::from_secs(3600)); 
+    let mut interval = time::interval(Duration::from_secs(3600));
     let zones = [
         ("Lombok Barat", "52.01.01.2014", "-8.6818", "116.1240"),
         ("Lombok Tengah", "52.02.01.2001", "-8.7167", "116.2667"),
@@ -1163,16 +1422,27 @@ async fn bmkg_tracker_task(state: Arc<AppState>) {
 
     loop {
         interval.tick().await;
-        state.metrics.bmkg_fetches.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        state
+            .metrics
+            .bmkg_fetches
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         *state.last_bmkg_fetch.write().unwrap() = Some(Utc::now());
 
         for (name, bmkg_id, lat, lon) in zones {
             let mut success = false;
-            let bmkg_url = format!("https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4={}", bmkg_id);
-            
+            let bmkg_url = format!(
+                "https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4={}",
+                bmkg_id
+            );
+
             if let Ok(res) = state.http_client.get(&bmkg_url).send().await {
                 if let Ok(json) = res.json::<BmkgResponse>().await {
-                    if let Some(item) = json.data.first().and_then(|g| g.cuaca.first()).and_then(|l| l.first()) {
+                    if let Some(item) = json
+                        .data
+                        .first()
+                        .and_then(|g| g.cuaca.first())
+                        .and_then(|l| l.first())
+                    {
                         let _ = sqlx::query(
                             "INSERT INTO weather_observations (recorded_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, data_source) VALUES (NOW(), $1, $2, $3, $4, $5, 'BMKG')",
                         )
@@ -1186,7 +1456,8 @@ async fn bmkg_tracker_task(state: Arc<AppState>) {
                             item.wd_deg,
                             item.t,
                             item.hu,
-                        ).await;
+                        )
+                        .await;
                     }
                 }
             }
@@ -1207,7 +1478,8 @@ async fn bmkg_tracker_task(state: Arc<AppState>) {
                             json.current.wind_direction_10m,
                             json.current.temperature_2m,
                             json.current.relative_humidity_2m,
-                        ).await;
+                        )
+                        .await;
                     }
                 }
             }
@@ -1221,8 +1493,16 @@ async fn data_retention_task(state: Arc<AppState>) {
     loop {
         interval.tick().await;
         info!("Running data retention cleanup...");
-        let _ = sqlx::query("DELETE FROM weather_observations WHERE recorded_at < NOW() - INTERVAL '30 days'").execute(&state.pool).await;
-        let _ = sqlx::query("DELETE FROM weather_forecasts WHERE created_at < NOW() - INTERVAL '7 days'").execute(&state.pool).await;
+        let _ = sqlx::query(
+            "DELETE FROM weather_observations WHERE recorded_at < NOW() - INTERVAL '30 days'",
+        )
+        .execute(&state.pool)
+        .await;
+        let _ = sqlx::query(
+            "DELETE FROM weather_forecasts WHERE created_at < NOW() - INTERVAL '7 days'",
+        )
+        .execute(&state.pool)
+        .await;
     }
 }
 
@@ -1250,8 +1530,10 @@ async fn weather_forecast_task(state: Arc<AppState>) {
                 if let Ok(forecast) = res.json::<OpenMeteoForecastResponse>().await {
                     for i in 0..forecast.hourly.time.len() {
                         let valid_at = chrono::NaiveDateTime::parse_from_str(
-                            &forecast.hourly.time[i], "%Y-%m-%dT%H:%M"
-                        ).unwrap_or_default();
+                            &forecast.hourly.time[i],
+                            "%Y-%m-%dT%H:%M",
+                        )
+                        .unwrap_or_default();
 
                         let _ = sqlx::query(
                             "INSERT INTO weather_forecasts (forecast_at, valid_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, data_source) VALUES (NOW(), $1, $2, $3, $4, $5, $6, 'Open-Meteo')",
@@ -1264,7 +1546,11 @@ async fn weather_forecast_task(state: Arc<AppState>) {
                         .bind(forecast.hourly.temperature_2m.get(i).copied().unwrap_or(0.0))
                         .execute(&state.pool).await;
                     }
-                    info!("Stored {} forecast hours for {}", forecast.hourly.time.len(), name);
+                    info!(
+                        "Stored {} forecast hours for {}",
+                        forecast.hourly.time.len(),
+                        name
+                    );
                 }
             }
             tokio::time::sleep(Duration::from_millis(500)).await;

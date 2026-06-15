@@ -113,8 +113,14 @@ mod tests {
         // Pasquill-Gifford dispersion coefficients at 1km
         // For unstable classes (A, B): sigma_z can be > sigma_y due to strong vertical mixing
         // For stable classes (D, E, F): sigma_y > sigma_z
-        let classes = [('A', 210.0, 450.0), ('B', 155.0, 110.0), ('C', 105.0, 61.0),
-                       ('D', 68.0, 31.0), ('E', 50.0, 21.0), ('F', 34.0, 11.0)];
+        let classes = [
+            ('A', 210.0, 450.0),
+            ('B', 155.0, 110.0),
+            ('C', 105.0, 61.0),
+            ('D', 68.0, 31.0),
+            ('E', 50.0, 21.0),
+            ('F', 34.0, 11.0),
+        ];
         for (cls, sy, sz) in classes {
             assert!(sy > 0.0, "sigma_y for class {} should be > 0", cls);
             assert!(sz > 0.0, "sigma_z for class {} should be > 0", cls);
@@ -131,7 +137,10 @@ mod tests {
         // Spread angle should decrease: A=25, B=20, C=15, D=12.5, E=8.75, F=5
         let angles = [25.0, 20.0, 15.0, 12.5, 8.75, 5.0];
         for i in 1..angles.len() {
-            assert!(angles[i] < angles[i - 1], "Spread angle should decrease from A to F");
+            assert!(
+                angles[i] < angles[i - 1],
+                "Spread angle should decrease from A to F"
+            );
         }
     }
 
@@ -140,9 +149,21 @@ mod tests {
         // Daytime: low wind -> A, medium -> B, high -> C
         fn classify(ws: f64, daytime: bool) -> char {
             if daytime {
-                if ws < 3.0 { 'A' } else if ws < 5.0 { 'B' } else { 'C' }
+                if ws < 3.0 {
+                    'A'
+                } else if ws < 5.0 {
+                    'B'
+                } else {
+                    'C'
+                }
             } else {
-                if ws < 3.0 { 'F' } else if ws < 5.0 { 'E' } else { 'D' }
+                if ws < 3.0 {
+                    'F'
+                } else if ws < 5.0 {
+                    'E'
+                } else {
+                    'D'
+                }
             }
         }
 
@@ -168,7 +189,11 @@ mod tests {
         // Transmittance is always between 0 and 1 for tau >= 0
         for tau in [0.0_f64, 0.5, 1.0, 2.0, 5.0] {
             let t = (-tau).exp();
-            assert!((0.0..=1.0).contains(&t), "Transmittance out of range for tau={}", tau);
+            assert!(
+                (0.0..=1.0).contains(&t),
+                "Transmittance out of range for tau={}",
+                tau
+            );
         }
     }
 
@@ -217,8 +242,18 @@ mod tests {
         ];
 
         for (name, lat, lon) in zones {
-            assert!(lon > 115.0 && lon < 120.0, "{} lon out of NTB bounds: {}", name, lon);
-            assert!(lat > -9.5 && lat < -8.0, "{} lat out of NTB bounds: {}", name, lat);
+            assert!(
+                lon > 115.0 && lon < 120.0,
+                "{} lon out of NTB bounds: {}",
+                name,
+                lon
+            );
+            assert!(
+                lat > -9.5 && lat < -8.0,
+                "{} lat out of NTB bounds: {}",
+                name,
+                lat
+            );
         }
     }
 
@@ -253,16 +288,16 @@ mod tests {
     fn test_phme_proximity_criterion() {
         // Proximity-only: plume origin within 100m of sensitive receptor
         let proximity_threshold = 100.0;
-        assert!(50.0 <= proximity_threshold);  // Within threshold
-        assert!(150.0 > proximity_threshold);  // Beyond threshold
+        assert!(50.0 <= proximity_threshold); // Within threshold
+        assert!(150.0 > proximity_threshold); // Beyond threshold
     }
 
     #[test]
     fn test_phme_size_criterion() {
         // Size and proximity: plume > 1000m AND overlaps receptor
         let size_threshold = 1000.0;
-        assert!(1500.0 > size_threshold);  // Large plume
-        assert!(500.0 <= size_threshold);  // Small plume
+        assert!(1500.0 > size_threshold); // Large plume
+        assert!(500.0 <= size_threshold); // Small plume
     }
 
     // ─── Terrain Blocking ────────────────────────────────────────────────
@@ -288,7 +323,10 @@ mod tests {
         let baseline_k = 308.15_f64; // 35°C
         let ratio = (baseline_k / temp_k).powi(4);
         assert!(ratio < 1.0, "T^4 penalty should reduce spread angle");
-        assert!(ratio > 0.9, "T^4 penalty should be small for small temp differences");
+        assert!(
+            ratio > 0.9,
+            "T^4 penalty should be small for small temp differences"
+        );
     }
 
     // ─── Sensor Smear ────────────────────────────────────────────────────
@@ -312,7 +350,10 @@ mod tests {
     #[test]
     fn test_emit_stac_url_format() {
         let url = "https://ghgcenter.upc.nasa.gov/api/stac";
-        assert!(url.starts_with("https://"), "EMIT STAC URL should use HTTPS");
+        assert!(
+            url.starts_with("https://"),
+            "EMIT STAC URL should use HTTPS"
+        );
         assert!(url.contains("stac"), "URL should contain 'stac'");
     }
 
@@ -341,8 +382,14 @@ mod tests {
     #[test]
     fn test_emit_collection_name() {
         let collection = "emit-ch4plume-v1";
-        assert!(collection.starts_with("emit-"), "Collection should start with 'emit-'");
-        assert!(collection.contains("ch4"), "Collection should reference CH4");
+        assert!(
+            collection.starts_with("emit-"),
+            "Collection should start with 'emit-'"
+        );
+        assert!(
+            collection.contains("ch4"),
+            "Collection should reference CH4"
+        );
     }
 
     // ─── EMIT Monitoring ────────────────────────────────────────────────
@@ -353,8 +400,14 @@ mod tests {
         // This is a compile-time check - if the field doesn't exist, this won't compile
         let health = HealthStatus {
             status: "HEALTHY".to_string(),
-            database: ComponentHealth { status: "OK".to_string(), message: None },
-            dem_file: ComponentHealth { status: "OK".to_string(), message: None },
+            database: ComponentHealth {
+                status: "OK".to_string(),
+                message: None,
+            },
+            dem_file: ComponentHealth {
+                status: "OK".to_string(),
+                message: None,
+            },
             last_bmkg_fetch: None,
             last_carbon_mapper_fetch: None,
             last_emit_fetch: None,
@@ -373,7 +426,10 @@ mod tests {
             "geoesg_emit_plumes_ingested",
         ];
         for metric in metrics {
-            assert!(metric.starts_with("geoesg_"), "Metric should start with 'geoesg_'");
+            assert!(
+                metric.starts_with("geoesg_"),
+                "Metric should start with 'geoesg_'"
+            );
             assert!(metric.contains("emit"), "Metric should contain 'emit'");
         }
     }

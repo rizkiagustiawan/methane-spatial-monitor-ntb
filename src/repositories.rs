@@ -1,11 +1,11 @@
+use crate::errors::AppError;
+use crate::models::*;
 /// Repository layer for database access
-/// 
+///
 /// Separates database logic from business logic
 /// Each repository handles one domain entity
 use sqlx::PgPool;
 use sqlx::Row;
-use crate::errors::AppError;
-use crate::models::*;
 
 /// Methane observations repository
 #[allow(dead_code)]
@@ -13,7 +13,10 @@ pub struct MethaneRepository;
 
 #[allow(dead_code)]
 impl MethaneRepository {
-    pub async fn get_recent(pool: &PgPool, limit: i64) -> Result<Vec<MethanePlumeResponse>, AppError> {
+    pub async fn get_recent(
+        pool: &PgPool,
+        limit: i64,
+    ) -> Result<Vec<MethanePlumeResponse>, AppError> {
         let records = sqlx::query(
             r#"SELECT recorded_at, emission_rate_kg_hr, ST_AsGeoJSON(location) as geometry,
                ST_AsGeoJSON(plume_geometry) as plume_geometry_json, source
@@ -22,7 +25,7 @@ impl MethaneRepository {
         .bind(limit)
         .fetch_all(pool)
         .await?;
-        
+
         let mut results = Vec::new();
         for row in records {
             let geometry_str: String = row.get("geometry");
@@ -31,13 +34,14 @@ impl MethaneRepository {
                 recorded_at: row.get("recorded_at"),
                 emission_rate_kg_hr: row.get("emission_rate_kg_hr"),
                 geometry: serde_json::from_str(&geometry_str).unwrap_or_default(),
-                plume_footprint: plume_geometry_json.and_then(|g: String| serde_json::from_str(&g).ok()),
+                plume_footprint: plume_geometry_json
+                    .and_then(|g: String| serde_json::from_str(&g).ok()),
                 source: row.get("source"),
             });
         }
         Ok(results)
     }
-    
+
     pub async fn get_active_sources(pool: &PgPool) -> Result<Vec<ActiveSource>, AppError> {
         let records = sqlx::query(
             r#"SELECT id, ST_X(location::geometry) as lon, ST_Y(location::geometry) as lat, emission_rate_kg_hr
@@ -61,7 +65,7 @@ impl MethaneRepository {
         }
         Ok(results)
     }
-    
+
     pub async fn insert(
         pool: &PgPool,
         recorded_at: chrono::DateTime<chrono::Utc>,
@@ -78,7 +82,7 @@ impl MethaneRepository {
         .bind(geometry)
         .execute(pool)
         .await?;
-        
+
         Ok(result.rows_affected() > 0)
     }
 }
@@ -89,7 +93,10 @@ pub struct WeatherRepository;
 
 #[allow(dead_code)]
 impl WeatherRepository {
-    pub async fn get_latest(pool: &PgPool, limit: i64) -> Result<Vec<WeatherObservation>, AppError> {
+    pub async fn get_latest(
+        pool: &PgPool,
+        limit: i64,
+    ) -> Result<Vec<WeatherObservation>, AppError> {
         let records = sqlx::query_as::<_, WeatherObservation>(
             "SELECT recorded_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, data_source
              FROM weather_observations ORDER BY recorded_at DESC LIMIT $1",
@@ -99,8 +106,11 @@ impl WeatherRepository {
         .await?;
         Ok(records)
     }
-    
-    pub async fn get_latest_for_region(pool: &PgPool, region: &str) -> Result<Option<WeatherObservation>, AppError> {
+
+    pub async fn get_latest_for_region(
+        pool: &PgPool,
+        region: &str,
+    ) -> Result<Option<WeatherObservation>, AppError> {
         let record = sqlx::query_as::<_, WeatherObservation>(
             r#"SELECT recorded_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, data_source
                FROM weather_observations 
@@ -148,8 +158,11 @@ impl ForecastRepository {
         }
         Ok(results)
     }
-    
-    pub async fn get_for_region(pool: &PgPool, region: &str) -> Result<Vec<WeatherForecast>, AppError> {
+
+    pub async fn get_for_region(
+        pool: &PgPool,
+        region: &str,
+    ) -> Result<Vec<WeatherForecast>, AppError> {
         let records = sqlx::query(
             r#"SELECT forecast_at, valid_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, data_source
                FROM weather_forecasts 
@@ -191,7 +204,7 @@ impl ZonesRepository {
         )
         .fetch_all(pool)
         .await?;
-        
+
         let mut results = Vec::new();
         for row in records {
             let geom: String = row.get("geom");
@@ -207,8 +220,11 @@ impl ZonesRepository {
         }
         Ok(results)
     }
-    
-    pub async fn get_intersecting(pool: &PgPool, geojson: &str) -> Result<Vec<AffectedZone>, AppError> {
+
+    pub async fn get_intersecting(
+        pool: &PgPool,
+        geojson: &str,
+    ) -> Result<Vec<AffectedZone>, AppError> {
         let records = sqlx::query(
             r#"SELECT zone_name, region, zone_type, population_estimate, is_volcanic_zone
                FROM populated_zones 
@@ -262,7 +278,7 @@ impl AlertRepository {
         .bind(stability_class)
         .execute(pool)
         .await?;
-        
+
         Ok(())
     }
 }

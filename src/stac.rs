@@ -143,8 +143,8 @@ pub struct MethaneStacProperties {
     pub datetime: DateTime<Utc>,
     pub emission_rate_kg_hr: f64,
     pub emission_rate_uncertainty_kg_hr: Option<f64>,
-    pub source_type: Option<String>,  // oil_gas, waste, coal, agriculture
-    pub instrument: Option<String>,   // tanager-1, emit, tropomi
+    pub source_type: Option<String>, // oil_gas, waste, coal, agriculture
+    pub instrument: Option<String>,  // tanager-1, emit, tropomi
     pub processing_level: Option<String>,
     #[serde(flatten)]
     pub extra: std::collections::HashMap<String, Value>,
@@ -161,14 +161,13 @@ impl StacItem {
         source: &str,
     ) -> Self {
         let mut properties = std::collections::HashMap::new();
-        properties.insert("emission_rate_kg_hr".to_string(), 
-            serde_json::json!(emission_rate_kg_hr));
-        properties.insert("source".to_string(), 
-            serde_json::json!(source));
-        properties.insert("instrument".to_string(), 
-            serde_json::json!("tanager-1"));
-        properties.insert("processing_level".to_string(), 
-            serde_json::json!("L2"));
+        properties.insert(
+            "emission_rate_kg_hr".to_string(),
+            serde_json::json!(emission_rate_kg_hr),
+        );
+        properties.insert("source".to_string(), serde_json::json!(source));
+        properties.insert("instrument".to_string(), serde_json::json!("tanager-1"));
+        properties.insert("processing_level".to_string(), serde_json::json!("L2"));
 
         StacItem {
             r#type: "Feature".to_string(),
@@ -314,13 +313,13 @@ mod tests {
         assert!(collection.title.is_some());
         assert!(collection.description.is_some());
         assert_eq!(collection.license, "proprietary");
-        
+
         // Check spatial extent covers NTB
         let bbox = &collection.extent.spatial.bbox[0];
-        assert!(bbox[0] < 116.0);  // West
-        assert!(bbox[2] > 119.0);  // East
-        assert!(bbox[1] < -9.0);   // South
-        assert!(bbox[3] >= -8.0);  // North
+        assert!(bbox[0] < 116.0); // West
+        assert!(bbox[2] > 119.0); // East
+        assert!(bbox[1] < -9.0); // South
+        assert!(bbox[3] >= -8.0); // North
     }
 
     #[test]

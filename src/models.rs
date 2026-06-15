@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 // ─── Methane Observation ─────────────────────────────────────────────────────
@@ -10,7 +10,7 @@ pub struct MethaneObservation {
     pub id: Uuid,
     pub recorded_at: DateTime<Utc>,
     pub emission_rate_kg_hr: f64,
-    pub location_json: String, // From ST_AsGeoJSON
+    pub location_json: String,               // From ST_AsGeoJSON
     pub plume_geometry_json: Option<String>, // From ST_AsGeoJSON (observed footprint)
     pub source: Option<String>,
 }
@@ -334,58 +334,58 @@ pub struct CarbonMapperPlumeResponse {
 pub struct CarbonMapperPlume {
     pub id: Uuid,
     pub plume_id: String,
-    pub gas: String,  // CH4 or CO2
+    pub gas: String, // CH4 or CO2
     pub geometry_json: serde_json::Value,
     pub scene_id: Option<String>,
     pub scene_timestamp: DateTime<Utc>,
-    pub instrument: String,  // tan, emi, ang, av3, GAO
-    pub platform: String,    // ISS, Tanager-1, etc.
-    
+    pub instrument: String, // tan, emi, ang, av3, GAO
+    pub platform: String,   // ISS, Tanager-1, etc.
+
     // Emission data
-    pub emission_auto: f64,  // kg/hr
-    pub emission_uncertainty_auto: Option<f64>,  // ± kg/hr
-    
+    pub emission_auto: f64,                     // kg/hr
+    pub emission_uncertainty_auto: Option<f64>, // ± kg/hr
+
     // Wind data
-    pub wind_speed_avg_auto: Option<f64>,  // m/s
+    pub wind_speed_avg_auto: Option<f64>, // m/s
     pub wind_speed_std_auto: Option<f64>,
-    pub wind_direction_avg_auto: Option<f64>,  // degrees
+    pub wind_direction_avg_auto: Option<f64>, // degrees
     pub wind_direction_std_auto: Option<f64>,
-    pub wind_source_auto: Option<String>,  // HRRR, ECMWF_IFS, ERA5
-    
+    pub wind_source_auto: Option<String>, // HRRR, ECMWF_IFS, ERA5
+
     // Plume geometry
-    pub plume_bounds: Option<Vec<f64>>,  // [min_lon, min_lat, max_lon, max_lat]
-    pub plume_length: Option<f64>,  // meters
-    
+    pub plume_bounds: Option<Vec<f64>>, // [min_lon, min_lat, max_lon, max_lat]
+    pub plume_length: Option<f64>,      // meters
+
     // Quality
-    pub plume_quality: Option<String>,  // good, questionable, bad
-    
+    pub plume_quality: Option<String>, // good, questionable, bad
+
     // Sector attribution
-    pub sector: Option<String>,  // IPCC sector code (1B2, 6A, etc.)
-    
+    pub sector: Option<String>, // IPCC sector code (1B2, 6A, etc.)
+
     // URLs for data products
     pub plume_png: Option<String>,
     pub plume_rgb_png: Option<String>,
     pub plume_tif: Option<String>,
-    pub con_tif: Option<String>,  // concentration map (ppm-m)
+    pub con_tif: Option<String>, // concentration map (ppm-m)
     pub rgb_png: Option<String>,
-    
+
     // Metadata
     pub collection: Option<String>,
-    pub cmf_type: Option<String>,  // mfa, mfm, mfma
-    pub status: Option<String>,  // published, etc.
+    pub cmf_type: Option<String>, // mfa, mfm, mfma
+    pub status: Option<String>,   // published, etc.
     pub hide_emission: Option<bool>,
     pub published_at: Option<DateTime<Utc>>,
-    
+
     // IME (Integrated Mass Enhancement)
-    pub ime: Option<f64>,  // kg of methane in plume
+    pub ime: Option<f64>, // kg of methane in plume
     pub ime_uncertainty: Option<f64>,
-    
+
     // Additional fields
     pub emission_version: Option<String>,
     pub processing_software: Option<String>,
-    pub gsd: Option<f64>,  // ground sampling distance
+    pub gsd: Option<f64>, // ground sampling distance
     pub sensitivity_mode: Option<String>,
-    pub off_nadir: Option<f64>,  // degrees
+    pub off_nadir: Option<f64>, // degrees
     pub mission_phase: Option<String>,
     pub provider: Option<String>,
 }
@@ -428,7 +428,7 @@ impl IpccSector {
             _ => Self::Other,
         }
     }
-    
+
     #[allow(dead_code)]
     pub fn to_name(&self) -> &'static str {
         match self {
@@ -450,10 +450,10 @@ impl IpccSector {
 #[derive(Debug, Deserialize, Clone)]
 pub struct PhmeCriteria {
     /// Proximity-only: plume origin is within 100 m of nearest sensitive receptor
-    pub proximity_threshold_m: f64,  // 100m
-    
+    pub proximity_threshold_m: f64, // 100m
+
     /// Size and proximity: plume length > 1000m AND overlaps sensitive receptor
-    pub size_threshold_m: f64,  // 1000m
+    pub size_threshold_m: f64, // 1000m
 }
 
 impl Default for PhmeCriteria {
@@ -469,21 +469,25 @@ impl Default for PhmeCriteria {
 impl PhmeCriteria {
     /// Check if a plume qualifies as PHME
     #[allow(dead_code)]
-    pub fn is_phme(&self, plume_length_m: Option<f64>, distance_to_receptor_m: Option<f64>) -> bool {
+    pub fn is_phme(
+        &self,
+        plume_length_m: Option<f64>,
+        distance_to_receptor_m: Option<f64>,
+    ) -> bool {
         // Proximity-only: plume origin within 100m of sensitive receptor
         if let Some(dist) = distance_to_receptor_m {
             if dist <= self.proximity_threshold_m {
                 return true;
             }
         }
-        
+
         // Size and proximity: plume > 1000m AND overlaps receptor
         if let (Some(length), Some(dist)) = (plume_length_m, distance_to_receptor_m) {
             if length > self.size_threshold_m && dist <= self.size_threshold_m {
                 return true;
             }
         }
-        
+
         false
     }
 }
@@ -516,11 +520,14 @@ mod emit_tests {
         let response: EmitStacResponse = serde_json::from_str(json).unwrap();
         assert_eq!(response.features.len(), 1);
         assert_eq!(response.links.len(), 1);
-        
+
         let feature = &response.features[0];
         assert_eq!(feature.properties.datetime, "2024-01-15T10:30:00Z");
         assert_eq!(feature.properties.ch4_plume_emission_rate, Some(150.5));
-        assert_eq!(feature.properties.ch4_plume_id, Some("emit-plume-001".to_string()));
+        assert_eq!(
+            feature.properties.ch4_plume_id,
+            Some("emit-plume-001".to_string())
+        );
         assert_eq!(feature.properties.platform, Some("ISS".to_string()));
         assert_eq!(feature.properties.instrument, Some("EMIT".to_string()));
         assert_eq!(feature.id, Some("feature-001".to_string()));
@@ -584,16 +591,25 @@ mod emit_tests {
 
         let response: EmitStacResponse = serde_json::from_str(json).unwrap();
         let feature = &response.features[0];
-        
+
         // Extract coordinates like emit_tracker_task does
         let (lon, lat) = if let Some(coords) = feature.geometry.get("coordinates") {
             if let Some(arr) = coords.as_array() {
                 if arr.len() >= 2 {
-                    (arr[0].as_f64().unwrap_or(0.0), arr[1].as_f64().unwrap_or(0.0))
-                } else { (0.0, 0.0) }
-            } else { (0.0, 0.0) }
-        } else { (0.0, 0.0) };
-        
+                    (
+                        arr[0].as_f64().unwrap_or(0.0),
+                        arr[1].as_f64().unwrap_or(0.0),
+                    )
+                } else {
+                    (0.0, 0.0)
+                }
+            } else {
+                (0.0, 0.0)
+            }
+        } else {
+            (0.0, 0.0)
+        };
+
         assert_eq!(lon, 116.5);
         assert_eq!(lat, -8.7);
     }

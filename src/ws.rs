@@ -72,10 +72,10 @@ pub async fn ws_handler(
 /// Handle WebSocket connection
 async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let (mut sender, mut receiver) = socket.split();
-    
+
     // Subscribe to broadcast channel
     let mut rx = state.ws_state.tx.subscribe();
-    
+
     // Spawn task to forward broadcast messages to WebSocket
     let mut send_task = tokio::spawn(async move {
         while let Ok(msg) = rx.recv().await {
@@ -84,42 +84,40 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             }
         }
     });
-    
+
     // Clone state for receive task
     let state_clone = state.clone();
     let tx = state_clone.ws_state.tx.clone();
-    
+
     // Spawn task to handle incoming WebSocket messages
     let mut recv_task = tokio::spawn(async move {
         while let Some(result) = receiver.next().await {
             match result {
-                Ok(msg) => {
-                    match msg {
-                        Message::Text(text) => {
-                            if let Ok(ws_msg) = serde_json::from_str::<WsMessage>(&text) {
-                                match ws_msg {
-                                    WsMessage::Ping => {
-                                        let _ = tx.send(WsMessage::Pong);
-                                    }
-                                    WsMessage::Subscribe { region } => {
-                                        tracing::info!("Client subscribed to region: {}", region);
-                                    }
-                                    WsMessage::Unsubscribe { region } => {
-                                        tracing::info!("Client unsubscribed from region: {}", region);
-                                    }
-                                    _ => {}
+                Ok(msg) => match msg {
+                    Message::Text(text) => {
+                        if let Ok(ws_msg) = serde_json::from_str::<WsMessage>(&text) {
+                            match ws_msg {
+                                WsMessage::Ping => {
+                                    let _ = tx.send(WsMessage::Pong);
                                 }
+                                WsMessage::Subscribe { region } => {
+                                    tracing::info!("Client subscribed to region: {}", region);
+                                }
+                                WsMessage::Unsubscribe { region } => {
+                                    tracing::info!("Client unsubscribed from region: {}", region);
+                                }
+                                _ => {}
                             }
                         }
-                        Message::Close(_) => break,
-                        _ => {}
                     }
-                }
+                    Message::Close(_) => break,
+                    _ => {}
+                },
                 Err(_) => break,
             }
         }
     });
-    
+
     // Wait for either task to finish
     tokio::select! {
         _ = &mut send_task => {
