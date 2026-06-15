@@ -60,3 +60,4 @@ logs/
 # --- CACHE ---
 .cache/
 *.cache
+docs/superpowers/
