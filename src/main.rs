@@ -1136,6 +1136,8 @@ async fn emit_tracker_task(state: Arc<AppState>) {
                         next_url = stac.links.iter()
                             .find(|l| l.rel == "next")
                             .map(|l| l.href.clone());
+                    } else {
+                        next_url = None;
                     }
                 }
                 _ => {
