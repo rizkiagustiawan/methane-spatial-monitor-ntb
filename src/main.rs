@@ -991,6 +991,7 @@ async fn carbon_mapper_tracker_task(state: Arc<AppState>) {
         state.metrics.carbon_mapper_fetches.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         
         let mut next_url = Some(state.config.carbon_mapper.base_url.clone());
+        let mut cycle_errors = 0u64;
         
         while let Some(url) = next_url.clone() {
             let payload = json!({
@@ -1039,15 +1040,17 @@ async fn carbon_mapper_tracker_task(state: Arc<AppState>) {
                         next_url = stac.links.iter().find(|l| l.rel == "next").map(|l| l.href.clone());
                     } else { next_url = None; }
                 }
-                _ => { 
+                _ => {
                     state.metrics.carbon_mapper_errors.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    next_url = None; 
+                    cycle_errors += 1;
+                    next_url = None;
             }
         }
         
-        // If Carbon Mapper failed or returned no data, log for EMIT fallback
-        if state.metrics.carbon_mapper_errors.load(std::sync::atomic::Ordering::Relaxed) > 0 {
-            info!("Carbon Mapper errors detected, EMIT fallback will run on next cycle");
+        // If Carbon Mapper had errors this cycle, log for EMIT fallback
+        if cycle_errors > 0 {
+            info!("Carbon Mapper had {} errors this cycle, EMIT fallback active", cycle_errors);
+            cycle_errors = 0;
         }
     }
 }
