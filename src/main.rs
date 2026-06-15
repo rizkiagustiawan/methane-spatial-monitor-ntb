@@ -1042,10 +1042,15 @@ async fn carbon_mapper_tracker_task(state: Arc<AppState>) {
                 _ => { 
                     state.metrics.carbon_mapper_errors.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     next_url = None; 
-                }
             }
         }
+        
+        // If Carbon Mapper failed or returned no data, log for EMIT fallback
+        if state.metrics.carbon_mapper_errors.load(std::sync::atomic::Ordering::Relaxed) > 0 {
+            info!("Carbon Mapper errors detected, EMIT fallback will run on next cycle");
+        }
     }
+}
 }
 
 async fn emit_tracker_task(state: Arc<AppState>) {
