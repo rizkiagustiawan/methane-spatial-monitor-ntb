@@ -122,7 +122,11 @@ impl AppConfig {
                     .unwrap_or(true),
                 base_url: std::env::var("EMIT_STAC_URL")
                     .unwrap_or_else(|_| "https://ghgcenter.upc.nasa.gov/api/stac".into()),
-                bbox: vec![115.40, -9.15, 119.45, -8.00],
+                bbox: std::env::var("EMIT_BBOX")
+                    .unwrap_or_else(|_| "115.40,-9.15,119.45,-8.00".into())
+                    .split(',')
+                    .map(|s| s.trim().parse().unwrap_or(0.0))
+                    .collect(),
                 poll_interval_secs: std::env::var("EMIT_POLL_INTERVAL_SECS")
                     .unwrap_or_else(|_| "43200".into())
                     .parse()
