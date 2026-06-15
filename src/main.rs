@@ -200,6 +200,7 @@ async fn main() {
         .route("/api/plume-prediction", get(get_multi_plume_prediction))
         .route("/api/plume-analysis", get(get_plume_analysis))
         .route("/api/zones", get(get_populated_zones))
+        .route("/api/s5p", get(get_s5p_overpasses))
         .route("/ws", get(ws::ws_handler))
         .route("/api/stac", get(stac_root))
         .route("/api/stac/collections", get(stac_collections))
@@ -254,6 +255,17 @@ async fn shutdown_signal() {
     }
 }
 
+async fn get_s5p_overpasses(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let records = sqlx::query_as::<_, S5pOverpass>(
+        "SELECT scene_id, start_datetime, end_datetime, orbit_number, netcdf_download_url FROM s5p_overpasses ORDER BY start_datetime DESC LIMIT 20"
+    )
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
+    
+    (axum::http::StatusCode::OK, axum::response::Json(serde_json::json!(records)))
+}
+
 // ─── API HANDLERS ────────────────────────────────────────────────────────────
 
 async fn health_check(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, AppError> {
@@ -294,6 +306,7 @@ async fn health_check(State(state): State<Arc<AppState>>) -> Result<impl IntoRes
         last_bmkg_fetch: last_bmkg,
         last_carbon_mapper_fetch: last_stac,
         last_emit_fetch: last_emit,
+        last_s5p_fetch: *state.last_s5p_fetch.read().unwrap(),
         uptime_seconds: state.start_time.elapsed().as_secs(),
     };
 
@@ -313,7 +326,9 @@ async fn metrics_handler(State(state): State<Arc<AppState>>) -> String {
          geoesg_bmkg_fetches {}\n\
          geoesg_bmkg_errors {}\n\
          geoesg_alerts_sent {}\n\
-         geoesg_plumes_ingested {}\n",
+         geoesg_plumes_ingested {}\n\
+         geoesg_s5p_fetches {}\n\
+         geoesg_s5p_errors {}\n",
         state.metrics.requests_total.load(Relaxed),
         state.metrics.request_errors.load(Relaxed),
         state.metrics.carbon_mapper_fetches.load(Relaxed),
@@ -325,6 +340,8 @@ async fn metrics_handler(State(state): State<Arc<AppState>>) -> String {
         state.metrics.bmkg_errors.load(Relaxed),
         state.metrics.alerts_sent.load(Relaxed),
         state.metrics.plumes_ingested.load(Relaxed),
+        state.metrics.s5p_fetches.load(Relaxed),
+        state.metrics.s5p_errors.load(Relaxed),
     )
 }
 

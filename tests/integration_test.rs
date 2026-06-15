@@ -426,6 +426,7 @@ mod tests {
             last_bmkg_fetch: None,
             last_carbon_mapper_fetch: None,
             last_emit_fetch: None,
+            last_s5p_fetch: None,
             uptime_seconds: 0,
         };
         assert_eq!(health.status, "HEALTHY");

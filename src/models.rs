@@ -168,6 +168,7 @@ pub struct HealthStatus {
     pub last_bmkg_fetch: Option<DateTime<Utc>>,
     pub last_carbon_mapper_fetch: Option<DateTime<Utc>>,
     pub last_emit_fetch: Option<DateTime<Utc>>,
+    pub last_s5p_fetch: Option<DateTime<Utc>>,
     pub uptime_seconds: u64,
 }
 
