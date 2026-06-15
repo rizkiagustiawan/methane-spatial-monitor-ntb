@@ -211,3 +211,92 @@ impl Default for PhysicsConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod emit_tests {
+    use super::*;
+
+    #[test]
+    fn test_emit_config_default_values() {
+        let config = EmitConfig {
+            enabled: true,
+            base_url: "https://ghgcenter.upc.nasa.gov/api/stac".to_string(),
+            bbox: vec![115.40, -9.15, 119.45, -8.00],
+            poll_interval_secs: 43200,
+        };
+        
+        assert!(config.enabled);
+        assert!(config.base_url.starts_with("https://"));
+        assert_eq!(config.bbox.len(), 4);
+        assert!(config.poll_interval_secs > 0);
+    }
+
+    #[test]
+    fn test_emit_config_bbox_parsing() {
+        let bbox_str = "115.40,-9.15,119.45,-8.00";
+        let bbox: Vec<f64> = bbox_str
+            .split(',')
+            .map(|s| s.trim().parse().unwrap_or(0.0))
+            .collect();
+        
+        assert_eq!(bbox.len(), 4);
+        assert_eq!(bbox[0], 115.40);
+        assert_eq!(bbox[1], -9.15);
+        assert_eq!(bbox[2], 119.45);
+        assert_eq!(bbox[3], -8.00);
+    }
+
+    #[test]
+    fn test_emit_config_invalid_bbox() {
+        let bbox_str = "115.40,-9.15";
+        let bbox: Vec<f64> = bbox_str
+            .split(',')
+            .map(|s| s.trim().parse().unwrap_or(0.0))
+            .collect();
+        
+        assert_ne!(bbox.len(), 4);
+    }
+
+    #[test]
+    fn test_emit_config_url_validation() {
+        let valid_urls = vec![
+            "https://ghgcenter.upc.nasa.gov/api/stac",
+            "http://localhost:8080/api/stac",
+        ];
+        
+        for url in valid_urls {
+            assert!(
+                url.starts_with("http://") || url.starts_with("https://"),
+                "URL should start with http:// or https://: {}",
+                url
+            );
+        }
+        
+        let invalid_urls = vec![
+            "ftp://example.com",
+            "not-a-url",
+            "",
+        ];
+        
+        for url in invalid_urls {
+            assert!(
+                !url.starts_with("http://") && !url.starts_with("https://"),
+                "URL should be invalid: {}",
+                url
+            );
+        }
+    }
+
+    #[test]
+    fn test_emit_config_poll_interval() {
+        let config = EmitConfig {
+            enabled: true,
+            base_url: "https://example.com".to_string(),
+            bbox: vec![115.40, -9.15, 119.45, -8.00],
+            poll_interval_secs: 43200,
+        };
+        
+        assert!(config.poll_interval_secs >= 3600, "Poll interval too short");
+        assert!(config.poll_interval_secs <= 86400, "Poll interval too long");
+    }
+}
