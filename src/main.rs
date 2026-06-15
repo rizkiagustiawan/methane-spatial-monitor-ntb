@@ -12,7 +12,7 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres, Row};
 use std::sync::Arc;
 use tokio::time::{self, Duration};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
 use uuid::Uuid;
@@ -991,6 +991,7 @@ async fn carbon_mapper_tracker_task(state: Arc<AppState>) {
         state.metrics.carbon_mapper_fetches.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         
         let mut next_url = Some(state.config.carbon_mapper.base_url.clone());
+        let mut cycle_errors = 0u64;
         
         while let Some(url) = next_url.clone() {
             let payload = json!({
@@ -1039,15 +1040,17 @@ async fn carbon_mapper_tracker_task(state: Arc<AppState>) {
                         next_url = stac.links.iter().find(|l| l.rel == "next").map(|l| l.href.clone());
                     } else { next_url = None; }
                 }
-                _ => { 
+                _ => {
                     state.metrics.carbon_mapper_errors.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    next_url = None; 
+                    cycle_errors += 1;
+                    next_url = None;
             }
         }
         
-        // If Carbon Mapper failed or returned no data, log for EMIT fallback
-        if state.metrics.carbon_mapper_errors.load(std::sync::atomic::Ordering::Relaxed) > 0 {
-            info!("Carbon Mapper errors detected, EMIT fallback will run on next cycle");
+        // If Carbon Mapper had errors this cycle, log for EMIT fallback
+        if cycle_errors > 0 {
+            info!("Carbon Mapper had {} errors this cycle, EMIT fallback active", cycle_errors);
+            cycle_errors = 0;
         }
     }
 }
@@ -1069,65 +1072,78 @@ async fn emit_tracker_task(state: Arc<AppState>) {
         interval.tick().await;
         state.metrics.emit_fetches.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-        let search_url = format!("{}/search", state.config.emit.base_url);
-        let payload = json!({
-            "collections": [collection],
-            "bbox": bbox,
-            "datetime": format!("2022-08-01T00:00:00Z/{}", Utc::now().format("%Y-%m-%dT%H:%M:%SZ")),
-            "limit": 100
-        });
+        let base_search_url = format!("{}/search", state.config.emit.base_url);
+        let mut next_url = Some(base_search_url.clone());
 
-        match state.http_client.post(&search_url).json(&payload).send().await {
-            Ok(res) if res.status().is_success() => {
-                if let Ok(stac) = res.json::<EmitStacResponse>().await {
-                    *state.last_emit_fetch.write().unwrap() = Some(Utc::now());
+        while let Some(url) = next_url.take() {
+            let payload = json!({
+                "collections": [collection],
+                "bbox": bbox,
+                "datetime": format!("2022-08-01T00:00:00Z/{}", Utc::now().format("%Y-%m-%dT%H:%M:%SZ")),
+                "limit": 100
+            });
 
-                    for feature in stac.features {
-                        let emission_rate = match feature.properties.ch4_plume_emission_rate {
-                            Some(rate) if rate > 0.0 => rate,
-                            _ => continue,
-                        };
+            match state.http_client.post(&url).json(&payload).send().await {
+                Ok(res) if res.status().is_success() => {
+                    if let Ok(stac) = res.json::<EmitStacResponse>().await {
+                        *state.last_emit_fetch.write().unwrap() = Some(Utc::now());
 
-                        let dt = match chrono::DateTime::parse_from_rfc3339(&feature.properties.datetime) {
-                            Ok(dt) => dt.with_timezone(&Utc),
-                            Err(_) => continue,
-                        };
+                        for feature in stac.features {
+                            let emission_rate = match feature.properties.ch4_plume_emission_rate {
+                                Some(rate) if rate > 0.0 => rate,
+                                _ => continue,
+                            };
 
-                        let geom = serde_json::to_string(&feature.geometry).unwrap_or_default();
+                            let dt = match chrono::DateTime::parse_from_rfc3339(&feature.properties.datetime) {
+                                Ok(dt) => dt.with_timezone(&Utc),
+                                Err(_) => continue,
+                            };
 
-                        let (lon, lat) = if let Some(coords) = feature.geometry.get("coordinates") {
-                            if let Some(arr) = coords.as_array() {
-                                if arr.len() >= 2 {
-                                    (arr[0].as_f64().unwrap_or(0.0), arr[1].as_f64().unwrap_or(0.0))
+                            let geom = serde_json::to_string(&feature.geometry).unwrap_or_default();
+
+                            let (lon, lat) = if let Some(coords) = feature.geometry.get("coordinates") {
+                                if let Some(arr) = coords.as_array() {
+                                    if arr.len() >= 2 {
+                                        (arr[0].as_f64().unwrap_or(0.0), arr[1].as_f64().unwrap_or(0.0))
+                                    } else { (0.0, 0.0) }
                                 } else { (0.0, 0.0) }
-                            } else { (0.0, 0.0) }
-                        } else { (0.0, 0.0) };
+                            } else { (0.0, 0.0) };
 
-                        let plume_id = feature.properties.ch4_plume_id
-                            .unwrap_or_else(|| format!("emit-{}", Uuid::new_v4()));
+                            let plume_id = feature.properties.ch4_plume_id
+                                .unwrap_or_else(|| format!("emit-{}", Uuid::new_v4()));
 
-                        let res = sqlx::query(
-                            "INSERT INTO methane_observations (recorded_at, emission_rate_kg_hr, location, plume_geometry, source) VALUES ($1, $2, ST_Centroid(ST_GeomFromGeoJSON($3)), ST_GeomFromGeoJSON($3), 'emit') ON CONFLICT (recorded_at, emission_rate_kg_hr) DO NOTHING",
-                        )
-                        .bind(dt).bind(emission_rate).bind(&geom)
-                        .execute(&state.pool).await;
+                            let res = sqlx::query(
+                                "INSERT INTO methane_observations (recorded_at, emission_rate_kg_hr, location, plume_geometry, source) VALUES ($1, $2, ST_Centroid(ST_GeomFromGeoJSON($3)), ST_GeomFromGeoJSON($3), 'emit') ON CONFLICT (recorded_at, emission_rate_kg_hr) DO NOTHING",
+                            )
+                            .bind(dt).bind(emission_rate).bind(&geom)
+                            .execute(&state.pool).await;
 
-                        if res.is_ok() && res.unwrap().rows_affected() > 0 {
-                            state.metrics.emit_plumes_ingested.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                            ws::broadcast_plume_update(
-                                &state.ws_state.tx,
-                                plume_id,
-                                emission_rate,
-                                lat,
-                                lon,
-                                dt.to_rfc3339(),
-                            ).await;
+                            if let Ok(result) = res {
+                                if result.rows_affected() > 0 {
+                                    state.metrics.emit_plumes_ingested.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                    ws::broadcast_plume_update(
+                                        &state.ws_state.tx,
+                                        plume_id,
+                                        emission_rate,
+                                        lat,
+                                        lon,
+                                        dt.to_rfc3339(),
+                                    ).await;
+                                }
+                            }
                         }
+
+                        next_url = stac.links.iter()
+                            .find(|l| l.rel == "next")
+                            .map(|l| l.href.clone());
+                    } else {
+                        next_url = None;
                     }
                 }
-            }
-            _ => {
-                state.metrics.emit_errors.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                _ => {
+                    state.metrics.emit_errors.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    warn!("EMIT fetch failed for: {}", url);
+                }
             }
         }
     }

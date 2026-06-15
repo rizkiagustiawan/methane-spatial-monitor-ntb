@@ -122,7 +122,11 @@ impl AppConfig {
                     .unwrap_or(true),
                 base_url: std::env::var("EMIT_STAC_URL")
                     .unwrap_or_else(|_| "https://ghgcenter.upc.nasa.gov/api/stac".into()),
-                bbox: vec![115.40, -9.15, 119.45, -8.00],
+                bbox: std::env::var("EMIT_BBOX")
+                    .unwrap_or_else(|_| "115.40,-9.15,119.45,-8.00".into())
+                    .split(',')
+                    .map(|s| s.trim().parse().unwrap_or(0.0))
+                    .collect(),
                 poll_interval_secs: std::env::var("EMIT_POLL_INTERVAL_SECS")
                     .unwrap_or_else(|_| "43200".into())
                     .parse()
@@ -179,6 +183,17 @@ impl AppConfig {
         }
         if self.physics.min_detection_kg_hr <= 0.0 {
             return Err(AppError::Config("min_detection_kg_hr must be > 0".into()));
+        }
+        if self.emit.enabled {
+            if self.emit.base_url.is_empty() {
+                return Err(AppError::Config("EMIT_STAC_URL cannot be empty when EMIT is enabled".into()));
+            }
+            if !self.emit.base_url.starts_with("http://") && !self.emit.base_url.starts_with("https://") {
+                return Err(AppError::Config("EMIT_STAC_URL must start with http:// or https://".into()));
+            }
+            if self.emit.bbox.len() != 4 {
+                return Err(AppError::Config("EMIT_BBOX must have exactly 4 values (min_lon,min_lat,max_lon,max_lat)".into()));
+            }
         }
         Ok(())
     }

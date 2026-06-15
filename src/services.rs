@@ -5,6 +5,7 @@
 
 use std::sync::Arc;
 use sqlx::PgPool;
+use sqlx::Row;
 use chrono::Timelike;
 use crate::errors::AppError;
 use crate::models::*;
@@ -234,12 +235,16 @@ impl PlumeAnalysisService {
     
     async fn get_observed_plume(&self, source: &ActiveSource) -> Result<ObservedPlume, AppError> {
         // Get plume geometry from database
-        let plume_geometry = sqlx::query!(
-            r#"SELECT ST_AsGeoJSON(plume_geometry) as "geom" FROM methane_observations WHERE id = $1"#,
-            source.id
-        ).fetch_optional(&self.pool).await?
-        .and_then(|r| r.geom)
-        .and_then(|g| serde_json::from_str(&g).ok());
+        let plume_geometry: Option<serde_json::Value> = sqlx::query(
+            r#"SELECT ST_AsGeoJSON(plume_geometry) as geom FROM methane_observations WHERE id = $1"#,
+        )
+        .bind(source.id)
+        .fetch_optional(&self.pool)
+        .await?
+        .and_then(|r| {
+            let geom: Option<String> = r.get("geom");
+            geom.and_then(|g: String| serde_json::from_str(&g).ok())
+        });
         
         // Check intersection with zones
         let affected_zones = if let Some(ref geom) = plume_geometry {
@@ -338,7 +343,7 @@ impl PlumeAnalysisService {
         wind_direction: f64,
         spread_angle: f64,
     ) -> Result<serde_json::Value, AppError> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             r#"WITH plume AS (
                 SELECT ST_MakePolygon(ST_MakeLine(ARRAY[
                     ST_SetSRID(ST_MakePoint($1::FLOAT8, $2::FLOAT8), 4326)::geometry,
@@ -347,10 +352,17 @@ impl PlumeAnalysisService {
                     ST_SetSRID(ST_MakePoint($1::FLOAT8, $2::FLOAT8), 4326)::geometry
                 ])) as geom
                )
-               SELECT ST_AsGeoJSON(geom) as "json!" FROM plume"#,
-            lon, lat, distance, wind_direction, spread_angle
-        ).fetch_one(&self.pool).await?;
+               SELECT ST_AsGeoJSON(geom) as json FROM plume"#,
+        )
+        .bind(lon)
+        .bind(lat)
+        .bind(distance)
+        .bind(wind_direction)
+        .bind(spread_angle)
+        .fetch_one(&self.pool)
+        .await?;
         
-        Ok(serde_json::from_str(&result.json).unwrap_or_default())
+        let json_str: String = result.get("json");
+        Ok(serde_json::from_str(&json_str).unwrap_or_default())
     }
 }
