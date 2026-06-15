@@ -39,6 +39,7 @@ Advanced real-time methane emission tracking, Gaussian dispersion prediction, an
 
 ### 5. **Automated Data Pipeline & Alerts:**
 - Background tasks handle paginated STAC ingestion and multi-source weather fetching.
+- **EMIT Fallback:** NASA EMIT STAC API as fallback when Carbon Mapper fails.
 - Weather forecast integration (Open-Meteo, 2-day hourly forecast).
 - Triggers real-time **Telegram Evacuation Alerts** when toxic concentration footprints intersect mapped populated areas (e.g., Kota Mataram, Sembalun).
 - Features automated 30-day weather data retention policies.
