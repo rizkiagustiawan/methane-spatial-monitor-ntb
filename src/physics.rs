@@ -13,6 +13,7 @@
 // Source: Carbon Mapper Product Guide v1.1.6 (Feb 14, 2025)
 // https://carbonmapper.org/articles/product-guide
 
+#[allow(dead_code)]
 pub mod tanager1 {
     /// CH4 90% Probability of Detection
     /// Source: Carbon Mapper Product Guide - "90-180 kg/hr"
@@ -71,6 +72,7 @@ pub mod tanager1 {
 // ─── SENSOR PHYSICS CONSTRAINTS ─────────────────────────────────────────────
 // Source: "Physics Limits in Remote Sensing" (2026)
 
+#[allow(dead_code)]
 pub mod sensor_physics {
     /// TDI (Time Delay Integration) smear limits
     /// Source: Physics Limits document - "permissible roll angles to under 6.85° 
@@ -108,6 +110,7 @@ pub mod sensor_physics {
 // ─── ATMOSPHERIC PHYSICS ────────────────────────────────────────────────────
 // Source: Radiative Transfer Theory, Beer-Lambert Law
 
+#[allow(dead_code)]
 pub mod atmospheric {
     /// Atmospheric windows for remote sensing
     /// Source: NOAA, GIS Geography - "Atmospheric Window in Remote Sensing"
@@ -289,6 +292,7 @@ pub mod gaussian_plume {
 // ─── UNCERTAINTY QUANTIFICATION ─────────────────────────────────────────────
 // Source: Optimal Estimation theory (Rodgers, 2000)
 
+#[allow(dead_code)]
 pub mod uncertainty {
     /// Sensor uncertainty for Tanager-1
     /// Source: AMT paper - retrieval uncertainty from Optimal Estimation
