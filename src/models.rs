@@ -162,6 +162,7 @@ pub struct HealthStatus {
     pub dem_file: ComponentHealth,
     pub last_bmkg_fetch: Option<DateTime<Utc>>,
     pub last_carbon_mapper_fetch: Option<DateTime<Utc>>,
+    pub last_emit_fetch: Option<DateTime<Utc>>,
     pub uptime_seconds: u64,
 }
 

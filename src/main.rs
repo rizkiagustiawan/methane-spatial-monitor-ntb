@@ -252,6 +252,7 @@ async fn health_check(State(state): State<Arc<AppState>>) -> Result<impl IntoRes
         dem_file: dem_status,
         last_bmkg_fetch: last_bmkg,
         last_carbon_mapper_fetch: last_stac,
+        last_emit_fetch: None,
         uptime_seconds: state.start_time.elapsed().as_secs(),
     };
 
