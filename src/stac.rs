@@ -137,6 +137,7 @@ pub struct StacSearchContext {
 }
 
 /// Methane-specific STAC extensions
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MethaneStacProperties {
     pub datetime: DateTime<Utc>,
@@ -245,6 +246,7 @@ impl StacCollection {
 
 impl StacSearchResponse {
     /// Create an empty search response
+    #[allow(dead_code)]
     pub fn empty() -> Self {
         StacSearchResponse {
             r#type: "FeatureCollection".to_string(),
