@@ -82,12 +82,99 @@
             "Populated Zones": zonesLayer
         }, { position: 'topright' }).addTo(map);
 
+        // ─── WebSocket Connection ───────────────────────────────────────
+        let ws = null;
+        let wsRetryDelay = 1000;
+
+        function connectWebSocket() {
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+            ws.onopen = () => {
+                console.log('[WS] Connected');
+                wsRetryDelay = 1000;
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    switch (msg.type) {
+                        case 'PlumeUpdate':
+                            handleWsPlumeUpdate(msg.data);
+                            break;
+                        case 'WeatherUpdate':
+                            handleWsWeatherUpdate(msg.data);
+                            break;
+                        case 'Alert':
+                            handleWsAlert(msg.data);
+                            break;
+                        case 'Pong':
+                            break;
+                    }
+                } catch (e) { console.warn('[WS] Parse error:', e); }
+            };
+
+            ws.onclose = () => {
+                console.log('[WS] Disconnected, retrying in', wsRetryDelay, 'ms');
+                setTimeout(connectWebSocket, wsRetryDelay);
+                wsRetryDelay = Math.min(wsRetryDelay * 2, 30000);
+            };
+
+            ws.onerror = (err) => {
+                console.error('[WS] Error:', err);
+                ws.close();
+            };
+        }
+
+        function handleWsPlumeUpdate(data) {
+            const marker = L.circleMarker([data.lat, data.lon], {
+                radius: 8, color: '#ff0', fillColor: '#0f0', fillOpacity: 1, weight: 2
+            }).bindPopup(
+                `<div style="background:#222;color:#0f0;padding:5px;">
+                    <b>NEW PLUME (Real-time)</b><br>
+                    Rate: ${data.emission_rate_kg_hr.toFixed(1)} kg/hr<br>
+                    Time: ${new Date(data.timestamp).toLocaleString()}
+                </div>`
+            );
+            plumesLayer.addLayer(marker);
+            marker.openPopup();
+            fetchData();
+        }
+
+        function handleWsWeatherUpdate(data) {
+            document.getElementById('statWeather').innerText =
+                `${data.region}: ${data.wind_speed_ms.toFixed(1)} m/s, ${data.temperature_c.toFixed(1)}°C`;
+        }
+
+        function handleWsAlert(data) {
+            const banner = document.getElementById('alertBanner');
+            banner.innerText = `EVACUATION ALERT: ${data.zone_name} (${data.region}) - ${data.emission_rate_kg_hr.toFixed(1)} kg/hr`;
+            banner.style.display = 'block';
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'Ping' }));
+            }
+        }
+
+        // Ping every 30s to keep connection alive
+        setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'Ping' }));
+            }
+        }, 30000);
+
+        // ─── HTTP Data Fetching ─────────────────────────────────────────
+
         async function fetchHealth() {
             try {
                 const res = await fetch('/health');
                 const data = await res.json();
                 document.getElementById('sysStatus').innerText = data.status;
                 document.getElementById('sysStatus').style.color = data.status === 'HEALTHY' ? '#0f0' : 'red';
+                if (data.uptime_seconds > 0) {
+                    const hrs = Math.floor(data.uptime_seconds / 3600);
+                    const mins = Math.floor((data.uptime_seconds % 3600) / 60);
+                    document.getElementById('sysStatus').innerText += ` (${hrs}h${mins}m)`;
+                }
             } catch (e) {}
         }
 
@@ -107,13 +194,15 @@
 
         async function fetchData() {
             try {
-                const [plumesRes, analysisRes] = await Promise.all([
+                const [plumesRes, analysisRes, statsRes] = await Promise.all([
                     fetch('/api/methane/plumes'),
-                    fetch('/api/plume-analysis')
+                    fetch('/api/plume-analysis'),
+                    fetch('/api/stats')
                 ]);
                 
                 const plumes = await plumesRes.json();
                 const analyses = await analysisRes.json();
+                const stats = await statsRes.json();
 
                 plumesLayer.clearLayers();
                 observedLayer.clearLayers();
@@ -191,16 +280,20 @@
                 }
 
                 // Update Dashboard
-                document.getElementById('statPlumes').innerText = plumes.length || 0;
-                document.getElementById('statMax').innerText = maxEmission > 0 ? `${maxEmission.toFixed(1)} kg/hr` : '-';
-                document.getElementById('statAlerts').innerText = activeAlerts;
+                document.getElementById('statPlumes').innerText = stats.plumes_last_24h || plumes.length || 0;
+                document.getElementById('statMax').innerText = stats.max_emission_rate > 0 ? `${stats.max_emission_rate.toFixed(1)} kg/hr` : (maxEmission > 0 ? `${maxEmission.toFixed(1)} kg/hr` : '-');
+                document.getElementById('statAlerts').innerText = stats.alerts_last_24h || activeAlerts;
                 
                 const banner = document.getElementById('alertBanner');
                 banner.style.display = activeAlerts > 0 ? 'block' : 'none';
 
                 // Fetch Weather info for dash
                 fetch('/api/weather').then(r => r.json()).then(w => {
-                    if (w && w.length > 0) document.getElementById('statWeather').innerText = w[0].data_source;
+                    if (w && w.length > 0) {
+                        const w0 = w[0];
+                        document.getElementById('statWeather').innerText =
+                            `${w0.area_id}: ${w0.wind_speed_ms?.toFixed(1) || '-'} m/s, ${w0.temperature_c?.toFixed(1) || '-'}°C (${w0.data_source})`;
+                    }
                 });
 
             } catch (error) { console.error('Fetch error:', error); }
@@ -209,7 +302,8 @@
         fetchHealth();
         fetchZones();
         fetchData();
-        setInterval(fetchData, 60000); // 60s poll
+        connectWebSocket();
+        setInterval(fetchData, 60000);
         setInterval(fetchHealth, 60000);
     </script>
 </body>

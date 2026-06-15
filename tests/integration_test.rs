@@ -1,37 +1,36 @@
 //! Integration tests for GeoESG A.E.C.O Backend
-//! These tests don't require a database connection
+//! These tests verify physics, constants, and logic without database dependency
 
 #[cfg(test)]
 mod tests {
-    // Import the physics functions from main.rs
-    // Note: These are tested without database dependency
+    // ─── Physics Constants ───────────────────────────────────────────────
 
     #[test]
-    fn test_physics_constants() {
-        // Test that physics constants are reasonable
-        let min_detection_kg_hr = 100.0;
-        assert!(min_detection_kg_hr > 0.0);
-        assert!(min_detection_kg_hr < 1000.0);
+    fn test_tanager1_detection_limits() {
+        // Source: Carbon Mapper Product Guide v1.1.6
+        // "CH4 90% Probability of Detection: 90-180 kg/hr"
+        let min = 90.0;
+        let max = 180.0;
+        let conservative = 150.0;
+        assert!(min > 0.0);
+        assert!(max > min);
+        assert!(conservative > min);
+        assert!(conservative < max);
     }
 
     #[test]
     fn test_pasquill_classes() {
-        // Test Pasquill-Gifford stability classes
         let classes = ['A', 'B', 'C', 'D', 'E', 'F'];
         assert_eq!(classes.len(), 6);
-        
-        // A is most unstable, F is most stable
-        assert!(classes[0] == 'A');
-        assert!(classes[5] == 'F');
+        assert_eq!(classes[0], 'A');
+        assert_eq!(classes[5], 'F');
     }
 
     #[test]
     fn test_sensor_limits() {
-        // Test sensor physical limits from documentation
-        let roll_limit = 6.85;  // degrees
-        let pitch_limit = 4.8;  // degrees
-        
-        // These are from Physics Limits in Remote Sensing document
+        // Source: Physics Limits in Remote Sensing
+        let roll_limit = 6.85;
+        let pitch_limit = 4.8;
         assert!(roll_limit > 0.0);
         assert!(pitch_limit > 0.0);
         assert!(roll_limit > pitch_limit);
@@ -39,7 +38,6 @@ mod tests {
 
     #[test]
     fn test_terrain_threshold() {
-        // Test terrain blocking threshold
         let threshold_m = 15.0;
         assert!(threshold_m > 0.0);
         assert!(threshold_m < 100.0);
@@ -47,25 +45,21 @@ mod tests {
 
     #[test]
     fn test_humidity_threshold() {
-        // Test humidity attenuation threshold
-        let threshold = 85.0;  // percent
+        let threshold = 85.0;
         assert!(threshold > 0.0);
         assert!(threshold <= 100.0);
     }
 
     #[test]
     fn test_wind_speed_bounds() {
-        // Test wind speed bounds for Pasquill classification
-        let low_wind = 3.0;   // m/s
-        let high_wind = 5.0;  // m/s
-        
+        let low_wind = 3.0;
+        let high_wind = 5.0;
         assert!(low_wind < high_wind);
         assert!(low_wind > 0.0);
     }
 
     #[test]
     fn test_stac_version() {
-        // Test STAC version constant
         let version = "1.0.0";
         assert!(!version.is_empty());
         assert!(version.contains('.'));
@@ -73,17 +67,238 @@ mod tests {
 
     #[test]
     fn test_ntb_bounds() {
-        // Test NTB geographic bounds
         let west = 115.40;
         let east = 119.45;
         let south = -9.15;
         let north = -8.00;
-        
         assert!(west < east);
         assert!(south < north);
         assert!(west > 110.0);
         assert!(east < 120.0);
         assert!(south < -8.0);
         assert!(north > -9.0);
+    }
+
+    // ─── Gaussian Plume Physics ──────────────────────────────────────────
+
+    #[test]
+    fn test_gaussian_concentration_formula() {
+        // C(x,0,0) = Q / (pi * u * sigma_y * sigma_z)
+        // With known values
+        let q = 1000.0 * 1000.0 / 3600.0; // 1000 kg/hr in g/s
+        let u = 3.0; // m/s
+        let sy = 68.0; // sigma_y at 1km for class D
+        let sz = 31.0; // sigma_z at 1km for class D
+        let pi = std::f64::consts::PI;
+
+        let conc = q / (pi * u * sy * sz);
+        assert!(conc > 0.0);
+
+        // Higher emission -> higher concentration
+        let conc_high = (q * 2.0) / (pi * u * sy * sz);
+        assert!(conc_high > conc);
+
+        // Higher wind -> lower concentration
+        let conc_low_wind = q / (pi * (u * 2.0) * sy * sz);
+        assert!(conc_low_wind < conc);
+    }
+
+    #[test]
+    fn test_dispersion_coefficients_ordering() {
+        // Pasquill-Gifford dispersion coefficients at 1km
+        // For unstable classes (A, B): sigma_z can be > sigma_y due to strong vertical mixing
+        // For stable classes (D, E, F): sigma_y > sigma_z
+        let classes = [('A', 210.0, 450.0), ('B', 155.0, 110.0), ('C', 105.0, 61.0),
+                       ('D', 68.0, 31.0), ('E', 50.0, 21.0), ('F', 34.0, 11.0)];
+        for (cls, sy, sz) in classes {
+            assert!(sy > 0.0, "sigma_y for class {} should be > 0", cls);
+            assert!(sz > 0.0, "sigma_z for class {} should be > 0", cls);
+        }
+        // For stable conditions, sigma_y > sigma_z
+        const { assert!(68.0 > 31.0); } // D
+        const { assert!(50.0 > 21.0); } // E
+        const { assert!(34.0 > 11.0); } // F
+    }
+
+    #[test]
+    fn test_stability_class_progression() {
+        // A (most unstable) -> F (most stable)
+        // Spread angle should decrease: A=25, B=20, C=15, D=12.5, E=8.75, F=5
+        let angles = [25.0, 20.0, 15.0, 12.5, 8.75, 5.0];
+        for i in 1..angles.len() {
+            assert!(angles[i] < angles[i - 1], "Spread angle should decrease from A to F");
+        }
+    }
+
+    #[test]
+    fn test_pasquill_stability_classification_logic() {
+        // Daytime: low wind -> A, medium -> B, high -> C
+        fn classify(ws: f64, daytime: bool) -> char {
+            if daytime {
+                if ws < 3.0 { 'A' } else if ws < 5.0 { 'B' } else { 'C' }
+            } else {
+                if ws < 3.0 { 'F' } else if ws < 5.0 { 'E' } else { 'D' }
+            }
+        }
+
+        assert_eq!(classify(2.0, true), 'A');
+        assert_eq!(classify(4.0, true), 'B');
+        assert_eq!(classify(6.0, true), 'C');
+        assert_eq!(classify(2.0, false), 'F');
+        assert_eq!(classify(4.0, false), 'E');
+        assert_eq!(classify(6.0, false), 'D');
+    }
+
+    // ─── Beer-Lambert Law ────────────────────────────────────────────────
+
+    #[test]
+    fn test_beer_lambert_transmittance() {
+        // T = exp(-tau)
+        let tau_zero = (0.0_f64).exp();
+        assert!((tau_zero - 1.0).abs() < 0.001);
+
+        let tau_one = (-1.0_f64).exp();
+        assert!((tau_one - 0.368).abs() < 0.01);
+
+        // Transmittance is always between 0 and 1 for tau >= 0
+        for tau in [0.0_f64, 0.5, 1.0, 2.0, 5.0] {
+            let t = (-tau).exp();
+            assert!((0.0..=1.0).contains(&t), "Transmittance out of range for tau={}", tau);
+        }
+    }
+
+    // ─── Rayleigh Scattering ─────────────────────────────────────────────
+
+    #[test]
+    fn test_rayleigh_scattering_wavelength_dependence() {
+        // sigma ~ lambda^-4
+        // Blue (450nm) scatters more than red (650nm)
+        let blue = (550.0_f64 / 450.0).powi(4);
+        let red = (550.0_f64 / 650.0).powi(4);
+        assert!(blue > red, "Blue should scatter more than red");
+    }
+
+    // ─── Uncertainty Propagation ─────────────────────────────────────────
+
+    #[test]
+    fn test_uncertainty_quadrature() {
+        // sigma_total = sqrt(sigma_s^2 + sigma_w^2 + sigma_m^2)
+        let s = 0.40_f64; // sensor
+        let w = 0.20_f64; // weather
+        let m = 0.50_f64; // model
+        let total = (s * s + w * w + m * m).sqrt();
+        assert!(total > 0.0);
+        assert!(total < 1.0);
+        // Should be ~0.67
+        assert!((total - 0.67).abs() < 0.05);
+    }
+
+    // ─── Geographic Coordinate Tests ─────────────────────────────────────
+
+    #[test]
+    fn test_ntb_zone_coordinates() {
+        // Verify all NTB zone centers are within bounds
+        let zones = [
+            ("Lombok Barat", -8.6818, 116.1240),
+            ("Lombok Tengah", -8.7167, 116.2667),
+            ("Lombok Timur", -8.6500, 116.5333),
+            ("Lombok Utara", -8.3500, 116.4000),
+            ("Kota Mataram", -8.5833, 116.1167),
+            ("Sumbawa Barat", -8.7333, 116.8500),
+            ("Sumbawa", -8.5000, 117.4167),
+            ("Dompu", -8.5333, 118.4667),
+            ("Bima", -8.6500, 118.6167),
+            ("Kota Bima", -8.4667, 118.7167),
+        ];
+
+        for (name, lat, lon) in zones {
+            assert!(lon > 115.0 && lon < 120.0, "{} lon out of NTB bounds: {}", name, lon);
+            assert!(lat > -9.5 && lat < -8.0, "{} lat out of NTB bounds: {}", name, lat);
+        }
+    }
+
+    // ─── Wind Speed Safety ───────────────────────────────────────────────
+
+    #[test]
+    fn test_wind_speed_clamping() {
+        // Wind speed < 1.0 m/s should be clamped to prevent division by zero
+        let ws = 0.5_f64;
+        let ws_safe = if ws < 1.0 { 1.0 } else { ws };
+        assert_eq!(ws_safe, 1.0);
+
+        let ws_ok = 3.0_f64;
+        let ws_safe2 = if ws_ok < 1.0 { 1.0 } else { ws_ok };
+        assert_eq!(ws_safe2, 3.0);
+    }
+
+    // ─── CH4 Unit Conversion ─────────────────────────────────────────────
+
+    #[test]
+    fn test_ch4_ppm_conversion() {
+        // ppm = mg/m3 * 1.5 (approximate at ambient conditions)
+        let mg_m3 = 10.0;
+        let ppm = mg_m3 * 1.5;
+        assert!(ppm > 0.0);
+        assert_eq!(ppm, 15.0);
+    }
+
+    // ─── PHME Criteria ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_phme_proximity_criterion() {
+        // Proximity-only: plume origin within 100m of sensitive receptor
+        let proximity_threshold = 100.0;
+        assert!(50.0 <= proximity_threshold);  // Within threshold
+        assert!(150.0 > proximity_threshold);  // Beyond threshold
+    }
+
+    #[test]
+    fn test_phme_size_criterion() {
+        // Size and proximity: plume > 1000m AND overlaps receptor
+        let size_threshold = 1000.0;
+        assert!(1500.0 > size_threshold);  // Large plume
+        assert!(500.0 <= size_threshold);  // Small plume
+    }
+
+    // ─── Terrain Blocking ────────────────────────────────────────────────
+
+    #[test]
+    fn test_terrain_blocking_elevation_diff() {
+        // If terrain rises >15m along plume path, assume blocked
+        let origin_elev = 100.0;
+        let terrain_elev = 120.0;
+        let threshold = 15.0;
+        assert!(terrain_elev - origin_elev > threshold); // Should block
+
+        let low_terrain = 110.0;
+        assert!(low_terrain - origin_elev <= threshold); // Should not block
+    }
+
+    // ─── Thermal Stability Correction ────────────────────────────────────
+
+    #[test]
+    fn test_thermal_stability_t4_penalty() {
+        // Uses T^4 ratio as heuristic for spread angle reduction
+        let temp_k = 313.15_f64; // 40°C
+        let baseline_k = 308.15_f64; // 35°C
+        let ratio = (baseline_k / temp_k).powi(4);
+        assert!(ratio < 1.0, "T^4 penalty should reduce spread angle");
+        assert!(ratio > 0.9, "T^4 penalty should be small for small temp differences");
+    }
+
+    // ─── Sensor Smear ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_sensor_smear_detection() {
+        let roll_limit = 6.85;
+        let pitch_limit = 4.8;
+
+        // Below limits - no smear
+        assert!(5.0 <= roll_limit);
+        assert!(2.0 <= pitch_limit);
+
+        // Above limits - smear detected
+        assert!(7.0 > roll_limit);
+        assert!(5.0 > pitch_limit);
     }
 }

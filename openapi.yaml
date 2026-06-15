@@ -128,6 +128,27 @@ paths:
                 items:
                   $ref: '#/components/schemas/PlumeAnalysis'
 
+  /api/plume-prediction:
+    get:
+      summary: Multi-Plume Prediction
+      description: |
+        Returns Gaussian dispersion predictions for all active plumes in the last 24 hours.
+        Uses Pasquill-Gifford stability classification, terrain blocking via SRTM DEM,
+        and checks intersection with populated zones. Alerts are triggered when
+        centerline concentration at 1km exceeds 50 ppm.
+      operationId: getMultiPlumePrediction
+      tags:
+        - Analysis
+      responses:
+        '200':
+          description: Multi-plume predictions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MultiPlumePrediction'
+
   /api/zones:
     get:
       summary: Populated Zones
@@ -407,6 +428,46 @@ components:
         zone_type:
           type: string
         is_volcanic_zone:
+          type: boolean
+
+    MultiPlumePrediction:
+      type: object
+      properties:
+        source_id:
+          type: string
+          format: uuid
+        source_lon:
+          type: number
+        source_lat:
+          type: number
+        emission_rate_kg_hr:
+          type: number
+        wind_speed_ms:
+          type: number
+        wind_direction_deg:
+          type: number
+        stability_class:
+          type: string
+        spread_angle_deg:
+          type: number
+        max_distance_m:
+          type: number
+        concentration_at_1km_ppm:
+          type: number
+        plume_geojson:
+          $ref: '#/components/schemas/GeoJSON'
+        high_uncertainty_smear:
+          type: boolean
+        terrain_blocked:
+          type: boolean
+        terrain_block_distance_m:
+          type: number
+          nullable: true
+        affected_zones:
+          type: array
+          items:
+            $ref: '#/components/schemas/AffectedZone'
+        exposure_alert:
           type: boolean
 
     StacCatalog:

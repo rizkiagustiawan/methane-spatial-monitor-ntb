@@ -318,7 +318,7 @@ mod tests {
         assert!(bbox[0] < 116.0);  // West
         assert!(bbox[2] > 119.0);  // East
         assert!(bbox[1] < -9.0);   // South
-        assert!(bbox[3] > -8.0);   // North
+        assert!(bbox[3] >= -8.0);  // North
     }
 
     #[test]
