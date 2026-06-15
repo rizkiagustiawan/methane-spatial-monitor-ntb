@@ -47,6 +47,7 @@ struct AppState {
     last_bmkg_fetch: std::sync::RwLock<Option<DateTime<Utc>>>,
     last_stac_fetch: std::sync::RwLock<Option<DateTime<Utc>>>,
     last_emit_fetch: std::sync::RwLock<Option<DateTime<Utc>>>,
+    last_s5p_fetch: std::sync::RwLock<Option<DateTime<Utc>>>,
     start_time: std::time::Instant,
 }
 
@@ -127,6 +128,7 @@ async fn main() {
         last_bmkg_fetch: std::sync::RwLock::new(None),
         last_stac_fetch: std::sync::RwLock::new(None),
         last_emit_fetch: std::sync::RwLock::new(None),
+        last_s5p_fetch: std::sync::RwLock::new(None),
         start_time: std::time::Instant::now(),
     });
 
@@ -147,6 +149,12 @@ async fn main() {
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(60)).await;
         data_retention_task(state_cleanup).await;
+    });
+
+    let state_s5p = Arc::clone(&shared_state);
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        s5p_tracker_task(state_s5p).await;
     });
 
     let state_forecast = Arc::clone(&shared_state);
@@ -1405,6 +1413,72 @@ async fn emit_tracker_task(state: Arc<AppState>) {
                         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     warn!("EMIT fetch failed for: {}", url);
                 }
+            }
+        }
+    }
+}
+
+async fn s5p_tracker_task(state: Arc<AppState>) {
+    if !state.config.s5p.enabled {
+        info!("S5P macro radar disabled");
+        return;
+    }
+
+    let mut interval = time::interval(Duration::from_secs(state.config.s5p.poll_interval_secs));
+    // S5P requires slightly wider bounding box
+    let bbox = vec![115.0, -9.5, 120.0, -7.5];
+
+    info!("S5P macro radar started (poll: {}s)", state.config.s5p.poll_interval_secs);
+
+    loop {
+        interval.tick().await;
+        state.metrics.s5p_fetches.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+        let search_url = format!("{}/search", state.config.s5p.base_url);
+        let payload = json!({
+            "collections": ["sentinel-5p-l2-netcdf"],
+            "bbox": bbox,
+            "datetime": format!("2024-01-01T00:00:00Z/{}", Utc::now().format("%Y-%m-%dT%H:%M:%SZ")),
+            "query": {
+                "s5p:product_type": {"eq": "L2__CH4___"}
+            },
+            "limit": 10
+        });
+
+        match state.http_client.post(&search_url).json(&payload).send().await {
+            Ok(res) if res.status().is_success() => {
+                if let Ok(stac) = res.json::<PlanetaryComputerResponse>().await {
+                    *state.last_s5p_fetch.write().unwrap() = Some(Utc::now());
+
+                    for feature in stac.features {
+                        let start_dt = match chrono::DateTime::parse_from_rfc3339(&feature.properties.start_datetime) {
+                            Ok(dt) => dt.with_timezone(&Utc),
+                            Err(_) => continue,
+                        };
+                        let end_dt = match chrono::DateTime::parse_from_rfc3339(&feature.properties.end_datetime) {
+                            Ok(dt) => dt.with_timezone(&Utc),
+                            Err(_) => continue,
+                        };
+
+                        let geom = serde_json::to_string(&feature.geometry).unwrap_or_default();
+                        
+                        let download_url = feature.assets.get("ch4").map(|a| a.href.clone());
+
+                        let _ = sqlx::query(
+                            "INSERT INTO s5p_overpasses (scene_id, start_datetime, end_datetime, orbit_number, footprint, netcdf_download_url) VALUES ($1, $2, $3, $4, ST_GeomFromGeoJSON($5), $6) ON CONFLICT (scene_id) DO NOTHING",
+                        )
+                        .bind(&feature.id)
+                        .bind(start_dt)
+                        .bind(end_dt)
+                        .bind(feature.properties.orbit)
+                        .bind(&geom)
+                        .bind(download_url)
+                        .execute(&state.pool).await;
+                    }
+                }
+            }
+            _ => {
+                state.metrics.s5p_errors.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
         }
     }
