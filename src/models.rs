@@ -195,6 +195,9 @@ pub struct AppMetrics {
     pub request_errors: std::sync::atomic::AtomicU64,
     pub carbon_mapper_fetches: std::sync::atomic::AtomicU64,
     pub carbon_mapper_errors: std::sync::atomic::AtomicU64,
+    pub emit_fetches: std::sync::atomic::AtomicU64,
+    pub emit_errors: std::sync::atomic::AtomicU64,
+    pub emit_plumes_ingested: std::sync::atomic::AtomicU64,
     pub bmkg_fetches: std::sync::atomic::AtomicU64,
     pub bmkg_errors: std::sync::atomic::AtomicU64,
     pub alerts_sent: std::sync::atomic::AtomicU64,
@@ -266,6 +269,36 @@ pub struct StacProperties {
 pub struct StacLink {
     pub rel: String,
     pub href: String,
+}
+
+// ─── EMIT STAC Models (NASA GHG Center) ─────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct EmitStacResponse {
+    pub features: Vec<EmitStacFeature>,
+    #[serde(default)]
+    pub links: Vec<StacLink>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EmitStacFeature {
+    pub geometry: serde_json::Value,
+    pub properties: EmitStacProperties,
+    #[serde(default)]
+    pub id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EmitStacProperties {
+    pub datetime: String,
+    #[serde(default)]
+    pub ch4_plume_emission_rate: Option<f64>,
+    #[serde(default)]
+    pub ch4_plume_id: Option<String>,
+    #[serde(default)]
+    pub platform: Option<String>,
+    #[serde(default)]
+    pub instrument: Option<String>,
 }
 
 // ─── Carbon Mapper API Models ────────────────────────────────────────────────
