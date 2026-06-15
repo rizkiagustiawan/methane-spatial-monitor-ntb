@@ -11,6 +11,7 @@ pub struct AppConfig {
     pub database: DatabaseConfig,
     pub server: ServerConfig,
     pub carbon_mapper: CarbonMapperConfig,
+    pub emit: EmitConfig,
     pub weather: WeatherConfig,
     pub telegram: TelegramConfig,
     pub physics: PhysicsConfig,
@@ -34,6 +35,14 @@ pub struct ServerConfig {
 #[derive(Debug, Deserialize, Clone)]
 pub struct CarbonMapperConfig {
     pub api_token: String,
+    pub base_url: String,
+    pub bbox: Vec<f64>,
+    pub poll_interval_secs: u64,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct EmitConfig {
+    pub enabled: bool,
     pub base_url: String,
     pub bbox: Vec<f64>,
     pub poll_interval_secs: u64,
@@ -105,6 +114,19 @@ impl AppConfig {
                     .unwrap_or_else(|_| "https://api.carbonmapper.org/api/v1/stac/search".into()),
                 bbox: vec![115.40, -9.15, 119.45, -8.00],
                 poll_interval_secs: 86400,
+            },
+            emit: EmitConfig {
+                enabled: std::env::var("EMIT_ENABLED")
+                    .unwrap_or_else(|_| "true".into())
+                    .parse()
+                    .unwrap_or(true),
+                base_url: std::env::var("EMIT_STAC_URL")
+                    .unwrap_or_else(|_| "https://ghgcenter.upc.nasa.gov/api/stac".into()),
+                bbox: vec![115.40, -9.15, 119.45, -8.00],
+                poll_interval_secs: std::env::var("EMIT_POLL_INTERVAL_SECS")
+                    .unwrap_or_else(|_| "43200".into())
+                    .parse()
+                    .unwrap_or(43200),
             },
             weather: WeatherConfig {
                 bmkg_enabled: std::env::var("BMKG_ENABLED")
