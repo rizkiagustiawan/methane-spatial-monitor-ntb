@@ -155,6 +155,12 @@ POSTGRES_DB=geoesg_aeco
 # Carbon Mapper STAC API
 CARBON_MAPPER_TOKEN=your_token
 
+# NASA EMIT Fallback (GHG Center STAC)
+EMIT_ENABLED=true
+EMIT_STAC_URL=https://ghgcenter.upc.nasa.gov/api/stac
+EMIT_BBOX=115.40,-9.15,119.45,-8.00
+EMIT_POLL_INTERVAL_SECS=43200
+
 # Telegram Alerts
 TELEGRAM_BOT_TOKEN=your_bot_token
 TELEGRAM_CHAT_ID=your_chat_id
