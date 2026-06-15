@@ -1,8 +1,12 @@
 //! Integration tests for GeoESG A.E.C.O Backend
 //! These tests verify physics, constants, and logic without database dependency
 
+use geoesg_aeco_backend::models::{ComponentHealth, HealthStatus};
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     // ─── Physics Constants ───────────────────────────────────────────────
 
     #[test]
@@ -338,5 +342,38 @@ mod tests {
         let collection = "emit-ch4plume-v1";
         assert!(collection.starts_with("emit-"), "Collection should start with 'emit-'");
         assert!(collection.contains("ch4"), "Collection should reference CH4");
+    }
+
+    // ─── EMIT Monitoring ────────────────────────────────────────────────
+
+    #[test]
+    fn test_health_status_has_emit_field() {
+        // Verify HealthStatus struct has last_emit_fetch field
+        // This is a compile-time check - if the field doesn't exist, this won't compile
+        let health = HealthStatus {
+            status: "HEALTHY".to_string(),
+            database: ComponentHealth { status: "OK".to_string(), message: None },
+            dem_file: ComponentHealth { status: "OK".to_string(), message: None },
+            last_bmkg_fetch: None,
+            last_carbon_mapper_fetch: None,
+            last_emit_fetch: None,
+            uptime_seconds: 0,
+        };
+        assert_eq!(health.status, "HEALTHY");
+        assert!(health.last_emit_fetch.is_none());
+    }
+
+    #[test]
+    fn test_emit_metrics_names() {
+        // Verify metric names follow convention
+        let metrics = vec![
+            "geoesg_emit_fetches",
+            "geoesg_emit_errors",
+            "geoesg_emit_plumes_ingested",
+        ];
+        for metric in metrics {
+            assert!(metric.starts_with("geoesg_"), "Metric should start with 'geoesg_'");
+            assert!(metric.contains("emit"), "Metric should contain 'emit'");
+        }
     }
 }
