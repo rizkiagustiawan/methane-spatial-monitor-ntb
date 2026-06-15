@@ -1,14 +1,13 @@
-/// Physics Constants and Constraints for Remote Sensing
-/// 
-/// All values are sourced from peer-reviewed literature and official specifications.
-/// No overclaiming - every limitation is documented.
-/// 
-/// References:
-/// - Tanager-1: Carbon Mapper Product Guide v1.1.6 (Feb 14, 2025)
-/// - Physics Limits: Purdue University, NOAA, ESA documentation
-/// - Gaussian Plume: Turner (1970), ISC3 Manual
-/// - Atmospheric: HITRAN database, Beer-Lambert Law
-
+// Physics Constants and Constraints for Remote Sensing
+// 
+// All values are sourced from peer-reviewed literature and official specifications.
+// No overclaiming - every limitation is documented.
+// 
+// References:
+// - Tanager-1: Carbon Mapper Product Guide v1.1.6 (Feb 14, 2025)
+// - Physics Limits: Purdue University, NOAA, ESA documentation
+// - Gaussian Plume: Turner (1970), ISC3 Manual
+// - Atmospheric: HITRAN database, Beer-Lambert Law
 // ─── TANAGER-1 SATELLITE SPECIFICATIONS ─────────────────────────────────────
 // Source: Carbon Mapper Product Guide v1.1.6 (Feb 14, 2025)
 // https://carbonmapper.org/articles/product-guide
@@ -161,6 +160,7 @@ pub mod atmospheric {
 // ─── GAUSSIAN PLUME MODEL ───────────────────────────────────────────────────
 // Source: Turner (1970), ISC3 Manual, EPA guidelines
 
+#[allow(dead_code)]
 pub mod gaussian_plume {
     /// Gaussian Plume Model assumptions (MUST be documented):
     /// 
@@ -188,7 +188,7 @@ pub mod gaussian_plume {
     /// 6. GAUSSIAN DISTRIBUTION: Concentration follows Gaussian curve
     ///    - Valid for moderate distances (100m - 10km)
     ///    - Not valid for very near or very far distances
-    
+    ///
     /// Pasquill-Gifford Stability Classes
     /// Source: Turner (1970), ISC3 Manual
     /// 
@@ -342,6 +342,7 @@ pub mod uncertainty {
 
 // ─── PHYSICS LIMITATIONS DOCUMENTATION ──────────────────────────────────────
 
+#[allow(dead_code)]
 pub mod limitations {
     /// Document all limitations of this tool
     /// 
@@ -378,9 +379,11 @@ mod tests {
     fn test_tanager1_detection_limits() {
         // Source: Carbon Mapper Product Guide v1.1.6
         // "CH4 90% Probability of Detection: 90-180 kg/hr"
-        assert!(tanager1::DETECTION_90PCT_KG_HR > 0.0);
-        assert!(tanager1::DETECTION_90PCT_UPPER_KG_HR > tanager1::DETECTION_90PCT_KG_HR);
-        assert!(tanager1::DETECTION_CONSERVATIVE_KG_HR > tanager1::DETECTION_90PCT_KG_HR);
+        const {
+            assert!(tanager1::DETECTION_90PCT_KG_HR > 0.0);
+            assert!(tanager1::DETECTION_90PCT_UPPER_KG_HR > tanager1::DETECTION_90PCT_KG_HR);
+            assert!(tanager1::DETECTION_CONSERVATIVE_KG_HR > tanager1::DETECTION_90PCT_KG_HR);
+        }
         assert_eq!(tanager1::DETECTION_90PCT_KG_HR, 90.0);
         assert_eq!(tanager1::DETECTION_90PCT_UPPER_KG_HR, 180.0);
         assert_eq!(tanager1::DETECTION_CONSERVATIVE_KG_HR, 150.0);
@@ -390,7 +393,7 @@ mod tests {
     fn test_tanager1_spatial_resolution() {
         // Source: Product Guide - "CH4/CO2 image product pixel size: 30 meters"
         assert_eq!(tanager1::GSD_METERS, 30.0);
-        assert!(tanager1::GSD_METERS > 0.0);
+        const { assert!(tanager1::GSD_METERS > 0.0); }
     }
 
     #[test]

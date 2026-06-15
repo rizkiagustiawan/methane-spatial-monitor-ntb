@@ -2,7 +2,6 @@
 /// 
 /// All configuration is validated at startup
 /// Invalid configuration = immediate crash (fail-fast)
-
 use serde::Deserialize;
 use crate::errors::AppError;
 
@@ -12,6 +11,7 @@ pub struct AppConfig {
     pub server: ServerConfig,
     pub carbon_mapper: CarbonMapperConfig,
     pub emit: EmitConfig,
+    #[allow(dead_code)]
     pub weather: WeatherConfig,
     pub telegram: TelegramConfig,
     pub physics: PhysicsConfig,
@@ -29,6 +29,7 @@ pub struct DatabaseConfig {
 pub struct ServerConfig {
     pub host: String,
     pub port: u16,
+    #[allow(dead_code)]
     pub cors_origins: Vec<String>,
 }
 
@@ -50,9 +51,13 @@ pub struct EmitConfig {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct WeatherConfig {
+    #[allow(dead_code)]
     pub bmkg_enabled: bool,
+    #[allow(dead_code)]
     pub open_meteo_enabled: bool,
+    #[allow(dead_code)]
     pub forecast_days: u32,
+    #[allow(dead_code)]
     pub poll_interval_secs: u64,
 }
 
@@ -60,16 +65,22 @@ pub struct WeatherConfig {
 pub struct TelegramConfig {
     pub bot_token: String,
     pub chat_id: String,
+    #[allow(dead_code)]
     pub enabled: bool,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct PhysicsConfig {
     pub min_detection_kg_hr: f64,
+    #[allow(dead_code)]
     pub terrain_threshold_m: f64,
+    #[allow(dead_code)]
     pub humidity_threshold: f64,
+    #[allow(dead_code)]
     pub humidity_attenuation: f64,
+    #[allow(dead_code)]
     pub sensor_roll_limit: f64,
+    #[allow(dead_code)]
     pub sensor_pitch_limit: f64,
 }
 

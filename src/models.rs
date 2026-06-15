@@ -291,6 +291,7 @@ pub struct EmitStacFeature {
     pub geometry: serde_json::Value,
     pub properties: EmitStacProperties,
     #[serde(default)]
+    #[allow(dead_code)]
     pub id: Option<String>,
 }
 
@@ -302,8 +303,10 @@ pub struct EmitStacProperties {
     #[serde(default)]
     pub ch4_plume_id: Option<String>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub platform: Option<String>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub instrument: Option<String>,
 }
 

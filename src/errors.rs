@@ -18,21 +18,26 @@ pub enum AppError {
     Config(String),
 
     #[error("Sensor error: {0}")]
+    #[allow(dead_code)]
     Sensor(String),
 
     #[error("Physics error: {0}")]
+    #[allow(dead_code)]
     Physics(String),
 
     #[error("Not found: {0}")]
+    #[allow(dead_code)]
     NotFound(String),
 
     #[error("Validation error: {0}")]
+    #[allow(dead_code)]
     Validation(String),
 
     #[error("External service error: {0}")]
     ExternalService(String),
 
     #[error("Internal error: {0}")]
+    #[allow(dead_code)]
     Internal(String),
 }
 

@@ -108,6 +108,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn test_dispersion_coefficients_ordering() {
         // Pasquill-Gifford dispersion coefficients at 1km
         // For unstable classes (A, B): sigma_z can be > sigma_y due to strong vertical mixing
@@ -119,9 +120,9 @@ mod tests {
             assert!(sz > 0.0, "sigma_z for class {} should be > 0", cls);
         }
         // For stable conditions, sigma_y > sigma_z
-        const { assert!(68.0 > 31.0); } // D
-        const { assert!(50.0 > 21.0); } // E
-        const { assert!(34.0 > 11.0); } // F
+        assert!(68.0 > 31.0); // D
+        assert!(50.0 > 21.0); // E
+        assert!(34.0 > 11.0); // F
     }
 
     #[test]
@@ -318,7 +319,7 @@ mod tests {
     #[test]
     fn test_emit_default_bbox() {
         // NTB bounding box: [min_lon, min_lat, max_lon, max_lat]
-        let bbox = vec![115.40, -9.15, 119.45, -8.00];
+        let bbox = [115.40, -9.15, 119.45, -8.00];
         assert_eq!(bbox.len(), 4);
         assert!(bbox[0] < bbox[2], "min_lon should be < max_lon");
         assert!(bbox[1] < bbox[3], "min_lat should be < max_lat");

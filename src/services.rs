@@ -2,7 +2,6 @@
 /// 
 /// Separates business logic from HTTP handlers
 /// Each service handles one domain
-
 use std::sync::Arc;
 use sqlx::PgPool;
 use sqlx::Row;
@@ -145,6 +144,7 @@ impl AlertService {
         Self { pool, http_client, telegram_token, telegram_chat_id }
     }
     
+    #[allow(clippy::too_many_arguments)]
     pub async fn send_alert(
         &self,
         zone: &AffectedZone,

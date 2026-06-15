@@ -2,7 +2,6 @@
 /// 
 /// Separates database logic from business logic
 /// Each repository handles one domain entity
-
 use sqlx::PgPool;
 use sqlx::Row;
 use crate::errors::AppError;
@@ -239,6 +238,7 @@ pub struct AlertRepository;
 
 #[allow(dead_code)]
 impl AlertRepository {
+    #[allow(clippy::too_many_arguments)]
     pub async fn insert(
         pool: &PgPool,
         region: &str,
