@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 // ─── Methane Observation ─────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow)]
 pub struct MethaneObservation {
     pub id: Uuid,
@@ -14,6 +15,7 @@ pub struct MethaneObservation {
     pub source: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Clone)]
 pub struct MethanePlumeObserved {
     pub id: Uuid,
@@ -41,6 +43,7 @@ pub struct WeatherObservation {
 
 // ─── Weather Forecast ────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow)]
 pub struct WeatherForecast {
     pub id: i32,
@@ -70,6 +73,7 @@ pub struct HourlyForecast {
 
 // ─── Plume Prediction ────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct PlumePrediction {
     pub emission_rate_kg_hr: f64,
@@ -80,6 +84,7 @@ pub struct PlumePrediction {
     pub exposure_alert: bool,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Clone)]
 pub struct MultiPlumePrediction {
     pub source_id: Uuid,
@@ -307,6 +312,7 @@ pub struct EmitStacProperties {
 // https://carbonmapper.org/articles/product-guide
 
 /// Carbon Mapper API response for plumes
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct CarbonMapperPlumeResponse {
     pub bbox_count: u32,
@@ -320,6 +326,7 @@ pub struct CarbonMapperPlumeResponse {
 
 /// Individual plume from Carbon Mapper API
 /// Source: Product Guide - "Plume List Fields"
+#[allow(dead_code)]
 #[derive(Debug, Deserialize, Clone)]
 pub struct CarbonMapperPlume {
     pub id: Uuid,
@@ -382,6 +389,7 @@ pub struct CarbonMapperPlume {
 
 /// Sector attribution codes
 /// Source: Product Guide - "Sector Attribution Codes"
+#[allow(dead_code)]
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub enum IpccSector {
     #[serde(rename = "1A1")]
@@ -402,7 +410,9 @@ pub enum IpccSector {
     Other,
 }
 
+#[allow(dead_code)]
 impl IpccSector {
+    #[allow(dead_code)]
     pub fn from_code(code: &str) -> Self {
         match code {
             "1A1" => Self::ElectricityGeneration,
@@ -416,6 +426,7 @@ impl IpccSector {
         }
     }
     
+    #[allow(dead_code)]
     pub fn to_name(&self) -> &'static str {
         match self {
             Self::ElectricityGeneration => "Electricity Generation",
@@ -432,6 +443,7 @@ impl IpccSector {
 
 /// PHME (Potentially Harmful Methane Event) criteria
 /// Source: Product Guide - "L3A-PHME"
+#[allow(dead_code)]
 #[derive(Debug, Deserialize, Clone)]
 pub struct PhmeCriteria {
     /// Proximity-only: plume origin is within 100 m of nearest sensitive receptor
@@ -450,8 +462,10 @@ impl Default for PhmeCriteria {
     }
 }
 
+#[allow(dead_code)]
 impl PhmeCriteria {
     /// Check if a plume qualifies as PHME
+    #[allow(dead_code)]
     pub fn is_phme(&self, plume_length_m: Option<f64>, distance_to_receptor_m: Option<f64>) -> bool {
         // Proximity-only: plume origin within 100m of sensitive receptor
         if let Some(dist) = distance_to_receptor_m {
