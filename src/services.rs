@@ -326,8 +326,9 @@ impl PlumeAnalysisService {
             // Use actual forecast temperature or fallback to standard 25°C
             let temp_c = fc.temperature_c.unwrap_or(25.0);
             let pressure_kpa = gaussian_plume::STANDARD_PRESSURE_KPA; // Default to 1 atm
-            
-            let conc_1km = gaussian_plume::mgm3_to_ppm_ch4(conc_g_m3 * 1000.0, temp_c, pressure_kpa);
+
+            let conc_1km =
+                gaussian_plume::mgm3_to_ppm_ch4(conc_g_m3 * 1000.0, temp_c, pressure_kpa);
 
             let mut distance = ws * 3600.0;
             if hum > 85.0 {
