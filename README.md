@@ -8,6 +8,7 @@ Advanced real-time methane emission tracking, Gaussian dispersion prediction, an
 - **Database:** PostgreSQL + PostGIS (Spatial Intelligence)
 - **Data Sources:** 
   - **Carbon Mapper:** STAC API (Tanager-1 instrument) for high-resolution methane plumes.
+  - **NASA EMIT:** GHG Center STAC API for methane plume fallback (ISS-based).
   - **BMKG:** Real-time weather API (Wind, Temp, Humidity) across 10 NTB regions.
   - **Open-Meteo:** Secondary fallback for regional weather data + forecast.
   - **SRTM/DEM:** 30m Digital Elevation Model for terrain-aware tracking.
