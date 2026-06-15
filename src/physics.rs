@@ -276,23 +276,23 @@ pub mod gaussian_plume {
         emission_g_s / (std::f64::consts::PI * u * sigma_y * sigma_z)
     }
 
-    /// Convert g/m³ to ppm for CH4
+    // Thermodynamic Constants
+    pub const IDEAL_GAS_CONSTANT_R: f64 = 8.314462618; // J/(mol·K)
+    pub const CH4_MOLAR_MASS_G_MOL: f64 = 16.04;
+    pub const STANDARD_PRESSURE_KPA: f64 = 101.325; // 1 atm
+
+    /// Convert mg/m³ to ppm for CH4 using Ideal Gas Law
     ///
-    /// At STP (0°C, 1 atm):
-    /// 1 mol CH4 = 16 g
-    /// 1 mol gas = 22.4 L
-    /// 1 ppm = 1 μL/L = 1 mg/m³ * (22.4/16) = 1.4 mg/m³
-    ///
-    /// So: ppm = mg/m³ * (1/1.4) = mg/m³ * 0.714
-    ///
-    /// At 25°C: ppm = mg/m³ * (298/273) * (1/1.4) = mg/m³ * 0.78
-    ///
-    /// We use simplified conversion: ppm ≈ mg/m³ * 1.5
-    /// This is APPROXIMATE - real conversion depends on T and P
-    pub fn mgm3_to_ppm_ch4(concentration_mg_m3: f64) -> f64 {
-        // Simplified conversion for ambient conditions
-        // Real conversion: ppm = mg/m³ * (T/273) * (1/1.4)
-        concentration_mg_m3 * 1.5
+    /// Formula: ppm = (mg/m³ * R * T) / (P * M)
+    /// where:
+    /// R = 8.3144 J/(K·mol)
+    /// T = Temperature in Kelvin
+    /// P = Pressure in kPa
+    /// M = Molar mass of CH4 (16.04 g/mol)
+    pub fn mgm3_to_ppm_ch4(concentration_mg_m3: f64, temperature_c: f64, pressure_kpa: f64) -> f64 {
+        let temp_k = temperature_c + 273.15;
+        (concentration_mg_m3 * IDEAL_GAS_CONSTANT_R * temp_k)
+            / (pressure_kpa * CH4_MOLAR_MASS_G_MOL)
     }
 
     /// Terrain blocking threshold
