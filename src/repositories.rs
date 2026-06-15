@@ -9,8 +9,10 @@ use crate::errors::AppError;
 use crate::models::*;
 
 /// Methane observations repository
+#[allow(dead_code)]
 pub struct MethaneRepository;
 
+#[allow(dead_code)]
 impl MethaneRepository {
     pub async fn get_recent(pool: &PgPool, limit: i64) -> Result<Vec<MethanePlumeResponse>, AppError> {
         let records = sqlx::query(
@@ -83,8 +85,10 @@ impl MethaneRepository {
 }
 
 /// Weather observations repository
+#[allow(dead_code)]
 pub struct WeatherRepository;
 
+#[allow(dead_code)]
 impl WeatherRepository {
     pub async fn get_latest(pool: &PgPool, limit: i64) -> Result<Vec<WeatherObservation>, AppError> {
         let records = sqlx::query_as::<_, WeatherObservation>(
@@ -112,8 +116,10 @@ impl WeatherRepository {
 }
 
 /// Weather forecast repository
+#[allow(dead_code)]
 pub struct ForecastRepository;
 
+#[allow(dead_code)]
 impl ForecastRepository {
     pub async fn get_upcoming(pool: &PgPool, limit: i64) -> Result<Vec<WeatherForecast>, AppError> {
         let records = sqlx::query(
@@ -174,8 +180,10 @@ impl ForecastRepository {
 }
 
 /// Populated zones repository
+#[allow(dead_code)]
 pub struct ZonesRepository;
 
+#[allow(dead_code)]
 impl ZonesRepository {
     pub async fn get_all(pool: &PgPool) -> Result<Vec<serde_json::Value>, AppError> {
         let records = sqlx::query(
@@ -226,8 +234,10 @@ impl ZonesRepository {
 }
 
 /// Alert repository
+#[allow(dead_code)]
 pub struct AlertRepository;
 
+#[allow(dead_code)]
 impl AlertRepository {
     pub async fn insert(
         pool: &PgPool,
@@ -258,6 +268,7 @@ impl AlertRepository {
 }
 
 /// Helper struct for active sources
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ActiveSource {
     pub id: uuid::Uuid,
