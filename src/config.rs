@@ -11,6 +11,7 @@ pub struct AppConfig {
     pub server: ServerConfig,
     pub carbon_mapper: CarbonMapperConfig,
     pub emit: EmitConfig,
+    pub s5p: S5pConfig,
     #[allow(dead_code)]
     pub weather: WeatherConfig,
     pub telegram: TelegramConfig,
@@ -46,6 +47,14 @@ pub struct EmitConfig {
     pub enabled: bool,
     pub base_url: String,
     pub bbox: Vec<f64>,
+    pub poll_interval_secs: u64,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize, Clone)]
+pub struct S5pConfig {
+    pub enabled: bool,
+    pub base_url: String,
     pub poll_interval_secs: u64,
 }
 
@@ -140,6 +149,18 @@ impl AppConfig {
                     .unwrap_or_else(|_| "43200".into())
                     .parse()
                     .unwrap_or(43200),
+            },
+            s5p: S5pConfig {
+                enabled: std::env::var("S5P_ENABLED")
+                    .unwrap_or_else(|_| "true".into())
+                    .parse()
+                    .unwrap_or(true),
+                base_url: std::env::var("S5P_STAC_URL")
+                    .unwrap_or_else(|_| "https://planetarycomputer.microsoft.com/api/stac/v1".into()),
+                poll_interval_secs: std::env::var("S5P_POLL_INTERVAL_SECS")
+                    .unwrap_or_else(|_| "21600".into()) // 6 hours
+                    .parse()
+                    .unwrap_or(21600),
             },
             weather: WeatherConfig {
                 bmkg_enabled: std::env::var("BMKG_ENABLED")
