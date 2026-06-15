@@ -275,11 +275,26 @@ mod tests {
 
     #[test]
     fn test_ch4_ppm_conversion() {
-        // ppm = mg/m3 * 1.5 (approximate at ambient conditions)
+        // Test conversion at standard conditions (25°C, 1 atm)
         let mg_m3 = 10.0;
-        let ppm = mg_m3 * 1.5;
+        let temp_c = 25.0;
+        let pressure_kpa = 101.325;
+        
+        let ppm = geoesg_aeco_backend::physics::gaussian_plume::mgm3_to_ppm_ch4(mg_m3, temp_c, pressure_kpa);
         assert!(ppm > 0.0);
-        assert_eq!(ppm, 15.0);
+        
+        // At 25C and 1 atm:
+        // ppm = 10.0 * 8.3144 * 298.15 / (101.325 * 16.04) = 15.25
+        assert!((ppm - 15.25).abs() < 0.1);
+        
+        // Test temperature dependence
+        let temp_hot = 40.0;
+        let ppm_hot = geoesg_aeco_backend::physics::gaussian_plume::mgm3_to_ppm_ch4(mg_m3, temp_hot, pressure_kpa);
+        assert!(ppm_hot > ppm, "Higher temperature should result in higher volume/ppm");
+        
+        let temp_cold = 0.0;
+        let ppm_cold = geoesg_aeco_backend::physics::gaussian_plume::mgm3_to_ppm_ch4(mg_m3, temp_cold, pressure_kpa);
+        assert!(ppm_cold < ppm, "Lower temperature should result in lower volume/ppm");
     }
 
     // ─── PHME Criteria ──────────────────────────────────────────────────
