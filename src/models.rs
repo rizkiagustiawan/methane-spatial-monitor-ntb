@@ -208,6 +208,8 @@ pub struct AppMetrics {
     pub bmkg_errors: std::sync::atomic::AtomicU64,
     pub alerts_sent: std::sync::atomic::AtomicU64,
     pub plumes_ingested: std::sync::atomic::AtomicU64,
+    pub s5p_fetches: std::sync::atomic::AtomicU64,
+    pub s5p_errors: std::sync::atomic::AtomicU64,
 }
 
 // ─── BMKG JSON Models ────────────────────────────────────────────────────────
@@ -490,6 +492,45 @@ impl PhmeCriteria {
 
         false
     }
+}
+
+// ─── Sentinel-5P Models ──────────────────────────────────────────────────────
+
+#[allow(dead_code)]
+#[derive(Debug, Serialize, Clone, sqlx::FromRow)]
+pub struct S5pOverpass {
+    pub scene_id: String,
+    pub start_datetime: DateTime<Utc>,
+    pub end_datetime: DateTime<Utc>,
+    pub orbit_number: Option<i32>,
+    pub netcdf_download_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PlanetaryComputerResponse {
+    pub features: Vec<PlanetaryComputerFeature>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PlanetaryComputerFeature {
+    pub id: String,
+    pub geometry: serde_json::Value,
+    pub properties: PlanetaryComputerProperties,
+    #[serde(default)]
+    pub assets: std::collections::HashMap<String, PlanetaryComputerAsset>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PlanetaryComputerProperties {
+    pub start_datetime: String,
+    pub end_datetime: String,
+    #[serde(rename = "sat:absolute_orbit")]
+    pub orbit: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PlanetaryComputerAsset {
+    pub href: String,
 }
 
 #[cfg(test)]
