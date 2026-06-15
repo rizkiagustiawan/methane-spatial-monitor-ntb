@@ -469,3 +469,114 @@ impl PhmeCriteria {
         false
     }
 }
+
+#[cfg(test)]
+mod emit_tests {
+    use super::*;
+
+    #[test]
+    fn test_emit_stac_response_deserialization() {
+        let json = r#"{
+            "features": [
+                {
+                    "geometry": {"type": "Point", "coordinates": [116.5, -8.7]},
+                    "properties": {
+                        "datetime": "2024-01-15T10:30:00Z",
+                        "ch4_plume_emission_rate": 150.5,
+                        "ch4_plume_id": "emit-plume-001",
+                        "platform": "ISS",
+                        "instrument": "EMIT"
+                    },
+                    "id": "feature-001"
+                }
+            ],
+            "links": [
+                {"rel": "next", "href": "https://example.com/next"}
+            ]
+        }"#;
+
+        let response: EmitStacResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.features.len(), 1);
+        assert_eq!(response.links.len(), 1);
+        
+        let feature = &response.features[0];
+        assert_eq!(feature.properties.datetime, "2024-01-15T10:30:00Z");
+        assert_eq!(feature.properties.ch4_plume_emission_rate, Some(150.5));
+        assert_eq!(feature.properties.ch4_plume_id, Some("emit-plume-001".to_string()));
+        assert_eq!(feature.properties.platform, Some("ISS".to_string()));
+        assert_eq!(feature.properties.instrument, Some("EMIT".to_string()));
+        assert_eq!(feature.id, Some("feature-001".to_string()));
+    }
+
+    #[test]
+    fn test_emit_stac_response_empty_features() {
+        let json = r#"{"features": [], "links": []}"#;
+        let response: EmitStacResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.features.len(), 0);
+        assert_eq!(response.links.len(), 0);
+    }
+
+    #[test]
+    fn test_emit_stac_response_missing_optional_fields() {
+        let json = r#"{
+            "features": [
+                {
+                    "geometry": {"type": "Point", "coordinates": [116.5, -8.7]},
+                    "properties": {
+                        "datetime": "2024-01-15T10:30:00Z"
+                    }
+                }
+            ]
+        }"#;
+
+        let response: EmitStacResponse = serde_json::from_str(json).unwrap();
+        let feature = &response.features[0];
+        assert_eq!(feature.properties.ch4_plume_emission_rate, None);
+        assert_eq!(feature.properties.ch4_plume_id, None);
+        assert_eq!(feature.properties.platform, None);
+        assert_eq!(feature.properties.instrument, None);
+        assert_eq!(feature.id, None);
+    }
+
+    #[test]
+    fn test_emit_stac_response_missing_links() {
+        let json = r#"{
+            "features": [
+                {
+                    "geometry": {"type": "Point", "coordinates": [116.5, -8.7]},
+                    "properties": {"datetime": "2024-01-15T10:30:00Z"}
+                }
+            ]
+        }"#;
+
+        let response: EmitStacResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.links.len(), 0); // Should default to empty
+    }
+
+    #[test]
+    fn test_emit_feature_geometry_extraction() {
+        let json = r#"{
+            "features": [
+                {
+                    "geometry": {"type": "Point", "coordinates": [116.5, -8.7]},
+                    "properties": {"datetime": "2024-01-15T10:30:00Z"}
+                }
+            ]
+        }"#;
+
+        let response: EmitStacResponse = serde_json::from_str(json).unwrap();
+        let feature = &response.features[0];
+        
+        // Extract coordinates like emit_tracker_task does
+        let (lon, lat) = if let Some(coords) = feature.geometry.get("coordinates") {
+            if let Some(arr) = coords.as_array() {
+                if arr.len() >= 2 {
+                    (arr[0].as_f64().unwrap_or(0.0), arr[1].as_f64().unwrap_or(0.0))
+                } else { (0.0, 0.0) }
+            } else { (0.0, 0.0) }
+        } else { (0.0, 0.0) };
+        
+        assert_eq!(lon, 116.5);
+        assert_eq!(lat, -8.7);
+    }
+}
