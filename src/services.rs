@@ -42,10 +42,12 @@ pub fn get_region_from_coords(lon: f64, lat: f64) -> &'static str {
 }
 
 /// Methane service
+#[allow(dead_code)]
 pub struct MethaneService {
     pool: PgPool,
 }
 
+#[allow(dead_code)]
 impl MethaneService {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
@@ -61,10 +63,12 @@ impl MethaneService {
 }
 
 /// Weather service
+#[allow(dead_code)]
 pub struct WeatherService {
     pool: PgPool,
 }
 
+#[allow(dead_code)]
 impl WeatherService {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
@@ -80,10 +84,12 @@ impl WeatherService {
 }
 
 /// Forecast service
+#[allow(dead_code)]
 pub struct ForecastService {
     pool: PgPool,
 }
 
+#[allow(dead_code)]
 impl ForecastService {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
@@ -99,10 +105,12 @@ impl ForecastService {
 }
 
 /// Zones service
+#[allow(dead_code)]
 pub struct ZonesService {
     pool: PgPool,
 }
 
+#[allow(dead_code)]
 impl ZonesService {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
@@ -118,6 +126,7 @@ impl ZonesService {
 }
 
 /// Alert service
+#[allow(dead_code)]
 pub struct AlertService {
     pool: PgPool,
     http_client: reqwest::Client,
@@ -125,6 +134,7 @@ pub struct AlertService {
     telegram_chat_id: String,
 }
 
+#[allow(dead_code)]
 impl AlertService {
     pub fn new(
         pool: PgPool,
@@ -189,11 +199,13 @@ impl AlertService {
 }
 
 /// Plume analysis service
+#[allow(dead_code)]
 pub struct PlumeAnalysisService {
     pool: PgPool,
     alert_service: Arc<AlertService>,
 }
 
+#[allow(dead_code)]
 impl PlumeAnalysisService {
     pub fn new(pool: PgPool, alert_service: Arc<AlertService>) -> Self {
         Self { pool, alert_service }
