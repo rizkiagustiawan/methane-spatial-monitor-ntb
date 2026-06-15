@@ -282,20 +282,17 @@ pub mod gaussian_plume {
     pub const STANDARD_PRESSURE_KPA: f64 = 101.325; // 1 atm
 
     /// Convert mg/m³ to ppm for CH4 using Ideal Gas Law
-    /// 
+    ///
     /// Formula: ppm = (mg/m³ * R * T) / (P * M)
     /// where:
     /// R = 8.3144 J/(K·mol)
     /// T = Temperature in Kelvin
     /// P = Pressure in kPa
     /// M = Molar mass of CH4 (16.04 g/mol)
-    pub fn mgm3_to_ppm_ch4(
-        concentration_mg_m3: f64,
-        temperature_c: f64,
-        pressure_kpa: f64,
-    ) -> f64 {
+    pub fn mgm3_to_ppm_ch4(concentration_mg_m3: f64, temperature_c: f64, pressure_kpa: f64) -> f64 {
         let temp_k = temperature_c + 273.15;
-        (concentration_mg_m3 * IDEAL_GAS_CONSTANT_R * temp_k) / (pressure_kpa * CH4_MOLAR_MASS_G_MOL)
+        (concentration_mg_m3 * IDEAL_GAS_CONSTANT_R * temp_k)
+            / (pressure_kpa * CH4_MOLAR_MASS_G_MOL)
     }
 
     /// Terrain blocking threshold

@@ -155,8 +155,9 @@ impl AppConfig {
                     .unwrap_or_else(|_| "true".into())
                     .parse()
                     .unwrap_or(true),
-                base_url: std::env::var("S5P_STAC_URL")
-                    .unwrap_or_else(|_| "https://planetarycomputer.microsoft.com/api/stac/v1".into()),
+                base_url: std::env::var("S5P_STAC_URL").unwrap_or_else(|_| {
+                    "https://planetarycomputer.microsoft.com/api/stac/v1".into()
+                }),
                 poll_interval_secs: std::env::var("S5P_POLL_INTERVAL_SECS")
                     .unwrap_or_else(|_| "21600".into()) // 6 hours
                     .parse()

@@ -262,8 +262,11 @@ async fn get_s5p_overpasses(State(state): State<Arc<AppState>>) -> impl IntoResp
     .fetch_all(&state.pool)
     .await
     .unwrap_or_default();
-    
-    (axum::http::StatusCode::OK, axum::response::Json(serde_json::json!(records)))
+
+    (
+        axum::http::StatusCode::OK,
+        axum::response::Json(serde_json::json!(records)),
+    )
 }
 
 // ─── API HANDLERS ────────────────────────────────────────────────────────────
@@ -1445,11 +1448,17 @@ async fn s5p_tracker_task(state: Arc<AppState>) {
     // S5P requires slightly wider bounding box
     let bbox = vec![115.0, -9.5, 120.0, -7.5];
 
-    info!("S5P macro radar started (poll: {}s)", state.config.s5p.poll_interval_secs);
+    info!(
+        "S5P macro radar started (poll: {}s)",
+        state.config.s5p.poll_interval_secs
+    );
 
     loop {
         interval.tick().await;
-        state.metrics.s5p_fetches.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        state
+            .metrics
+            .s5p_fetches
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         let search_url = format!("{}/search", state.config.s5p.base_url);
         let payload = json!({
@@ -1462,23 +1471,33 @@ async fn s5p_tracker_task(state: Arc<AppState>) {
             "limit": 10
         });
 
-        match state.http_client.post(&search_url).json(&payload).send().await {
+        match state
+            .http_client
+            .post(&search_url)
+            .json(&payload)
+            .send()
+            .await
+        {
             Ok(res) if res.status().is_success() => {
                 if let Ok(stac) = res.json::<PlanetaryComputerResponse>().await {
                     *state.last_s5p_fetch.write().unwrap() = Some(Utc::now());
 
                     for feature in stac.features {
-                        let start_dt = match chrono::DateTime::parse_from_rfc3339(&feature.properties.start_datetime) {
+                        let start_dt = match chrono::DateTime::parse_from_rfc3339(
+                            &feature.properties.start_datetime,
+                        ) {
                             Ok(dt) => dt.with_timezone(&Utc),
                             Err(_) => continue,
                         };
-                        let end_dt = match chrono::DateTime::parse_from_rfc3339(&feature.properties.end_datetime) {
+                        let end_dt = match chrono::DateTime::parse_from_rfc3339(
+                            &feature.properties.end_datetime,
+                        ) {
                             Ok(dt) => dt.with_timezone(&Utc),
                             Err(_) => continue,
                         };
 
                         let geom = serde_json::to_string(&feature.geometry).unwrap_or_default();
-                        
+
                         let download_url = feature.assets.get("ch4").map(|a| a.href.clone());
 
                         let _ = sqlx::query(
@@ -1495,7 +1514,10 @@ async fn s5p_tracker_task(state: Arc<AppState>) {
                 }
             }
             _ => {
-                state.metrics.s5p_errors.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                state
+                    .metrics
+                    .s5p_errors
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
         }
     }
