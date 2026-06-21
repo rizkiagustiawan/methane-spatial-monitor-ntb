@@ -222,8 +222,7 @@ The physics engine and gap-filling logic in this tool have been validated agains
 | **Briggs (1973)** | Horizontal and vertical dispersion coefficients ($\sigma_y$, $\sigma_z$) across stability classes A-F. |
 | **HITRAN Database** | Methane ($CH_4$) absorption cross-section ($\approx 1.0\times 10^{-21}$ cm²/molecule) at the $2200$ nm SWIR band, used to calculate Beer-Lambert atmospheric transmittance limits. |
 | **Carbon Mapper Guide v1.1.6** | Tanager-1 optomechanical limits (Sensor Roll $\leq 6.85^\circ$, Pitch $\leq 4.8^\circ$) for MTF smear degradation warnings. |
-| Carbon Mapper Product Guide v1.1.6 | Tanager-1 specifications |
-| Radiative Transfer Theory | Beer-Lambert Law |
+| **Haversine Formula** | Spherical trigonometry applied in `physics.rs` for accurate geographic distance calculations between satellites and weather nodes. |
 
 ## Environment Variables
 
@@ -274,3 +273,5 @@ Proprietary - GeoESG A.E.C.O
 - **Briggs (1973)** for dispersion coefficients
 - **Vollrath et al. (2026)** for wind shear coefficient
 - **Conrad & Johnson (2026)** for wind uncertainty propagation
+- **Musayev et al. (2026)** for Atmospheric Digital Twin methodologies
+- **Prajesh et al. (2026)** for dMRV Carbon Credit integration frameworks
