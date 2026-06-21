@@ -304,7 +304,7 @@ impl PlumeAnalysisService {
         for fc in forecasts {
             let ws = fc.wind_speed_ms.unwrap_or(1.0);
             let wd = fc.wind_direction_deg.unwrap_or(0.0);
-            let hum = fc.humidity_percent.unwrap_or(0.0);
+            let hum = fc.humidity_percent.unwrap_or(70.0);
 
             let is_daytime = fc.valid_at.with_timezone(wita_offset).hour() >= 6
                 && fc.valid_at.with_timezone(wita_offset).hour() < 18;
@@ -330,10 +330,10 @@ impl PlumeAnalysisService {
             let conc_1km =
                 gaussian_plume::mgm3_to_ppm_ch4(conc_g_m3 * 1000.0, temp_c, pressure_kpa);
 
-            let mut distance = ws * 3600.0;
-            if hum > 85.0 {
-                distance *= 0.60;
-            }
+            // Apply humidity attenuation using Beer-Lambert Law
+            // Source: HITRAN Database, Radiative Transfer Theory
+            let humidity_factor = gaussian_plume::humidity_transmittance(hum);
+            let mut distance = ws * 3600.0 * humidity_factor;
 
             // Generate plume polygon
             let plume_geojson = self
