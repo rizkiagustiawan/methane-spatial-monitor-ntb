@@ -5,12 +5,12 @@ use crate::repositories::*;
 use chrono::Timelike;
 use sqlx::PgPool;
 use sqlx::Row;
-use uuid::Uuid;
 /// Service layer for business logic
 ///
 /// Separates business logic from HTTP handlers
 /// Each service handles one domain
 use std::sync::Arc;
+use uuid::Uuid;
 
 /// Get region from coordinates
 /// Returns the nearest NTB region based on lat/lon
@@ -304,11 +304,16 @@ impl PlumeAnalysisService {
                     // Simple Physics-Aware Confidence Scoring
                     // High rate + recent macro detection = high confidence it's still leaking
                     let mut confidence = 0.5; // Base 50%
-                    if rate > 1000.0 { confidence += 0.3; } // Massive historical leak
-                    else if rate > 500.0 { confidence += 0.2; }
+                    if rate > 1000.0 {
+                        confidence += 0.3;
+                    }
+                    // Massive historical leak
+                    else if rate > 500.0 {
+                        confidence += 0.2;
+                    }
 
                     anomalies.push(FusionAnomaly {
-                        anomaly_id: format!("fusion-{}-{}", s5p.scene_id, id.to_string()[..8].to_string()),
+                        anomaly_id: format!("fusion-{}-{}", s5p.scene_id, &id.to_string()[..8]),
                         source_id: id,
                         source_lon: lon,
                         source_lat: lat,

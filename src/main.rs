@@ -296,10 +296,18 @@ async fn get_fusion_anomalies(State(state): State<Arc<AppState>>) -> impl IntoRe
     let fusion_svc = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
 
     match fusion_svc.run_data_fusion().await {
-        Ok(anomalies) => (axum::http::StatusCode::OK, axum::response::Json(serde_json::json!(anomalies))).into_response(),
+        Ok(anomalies) => (
+            axum::http::StatusCode::OK,
+            axum::response::Json(serde_json::json!(anomalies)),
+        )
+            .into_response(),
         Err(e) => {
             tracing::error!("Fusion error: {}", e);
-            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, axum::response::Json(serde_json::json!({"error": "Failed to run data fusion"}))).into_response()
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                axum::response::Json(serde_json::json!({"error": "Failed to run data fusion"})),
+            )
+                .into_response()
         }
     }
 }
