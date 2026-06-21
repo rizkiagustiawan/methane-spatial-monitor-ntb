@@ -6,7 +6,6 @@ target/
 # Database & Data Spasial
 pgdata/
 geoesg_data/
-*.tif
 *.tiff
 
 # Environment Secrets
