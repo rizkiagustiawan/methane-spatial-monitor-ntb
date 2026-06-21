@@ -142,3 +142,17 @@ CREATE TABLE plume_predictions (
 
 CREATE INDEX idx_predictions_time ON plume_predictions (predicted_at DESC);
 CREATE INDEX idx_predictions_geom ON plume_predictions USING GIST(plume_polygon);
+
+-- Sentinel-5P Macro Overpasses (Feature: Early Warning)
+CREATE TABLE s5p_overpasses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    scene_id TEXT UNIQUE NOT NULL,
+    start_datetime TIMESTAMPTZ NOT NULL,
+    end_datetime TIMESTAMPTZ NOT NULL,
+    orbit_number INTEGER,
+    footprint GEOMETRY(Polygon, 4326),
+    netcdf_download_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_s5p_time ON s5p_overpasses (start_datetime DESC);
