@@ -23,7 +23,11 @@
             display: none; animation: blink 1s infinite;
         }
 
-        @keyframes blink { 50% { opacity: 0.5; } }
+        .blinking-dot {
+            animation: blink 1.5s infinite;
+        }
+
+        @keyframes blink { 50% { opacity: 0.2; } }
 
         .dashboard {
             position: absolute; bottom: 20px; left: 20px; z-index: 1000;
@@ -63,6 +67,7 @@
         <div class="legend-item"><div class="legend-color" style="background:rgba(255,0,0,0.5)"></div> Evacuation Zone Alert</div>
         <div class="legend-item"><div class="legend-color" style="background:rgba(100,100,255,0.2)"></div> Populated Zone</div>
         <div class="legend-item"><div class="legend-color" style="border-color:#00ffff; background:rgba(0,255,255,0.05); border-style:dashed"></div> S5P Macro Radar</div>
+        <div class="legend-item"><div class="legend-color" style="background:#ff00ff; border-radius:50%"></div> Data Fusion Anomaly</div>
     </div>
 
     <div id="map"></div>
@@ -76,13 +81,15 @@
         let forecastLayer = L.layerGroup().addTo(map);
         let zonesLayer = L.layerGroup().addTo(map);
         let s5pLayer = L.layerGroup().addTo(map);
+        let fusionLayer = L.layerGroup().addTo(map);
 
         L.control.layers(null, {
             "Methane Sources": plumesLayer,
             "Observed Plumes": observedLayer,
             "Forecast Plumes": forecastLayer,
             "Populated Zones": zonesLayer,
-            "Sentinel-5P Macro": s5pLayer
+            "Sentinel-5P Macro": s5pLayer,
+            "AI Fusion Anomalies": fusionLayer
         }, { position: 'topright' }).addTo(map);
 
         // ─── WebSocket Connection ───────────────────────────────────────
@@ -197,22 +204,43 @@
 
         async function fetchData() {
             try {
-                const [plumesRes, analysisRes, statsRes, s5pRes] = await Promise.all([
+                const [plumesRes, analysisRes, statsRes, s5pRes, fusionRes] = await Promise.all([
                     fetch('/api/methane/plumes'),
                     fetch('/api/plume-analysis'),
                     fetch('/api/stats'),
-                    fetch('/api/s5p')
+                    fetch('/api/s5p'),
+                    fetch('/api/fusion')
                 ]);
                 
                 const plumes = await plumesRes.json();
                 const analyses = await analysisRes.json();
                 const stats = await statsRes.json();
                 const s5pData = await s5pRes.json();
+                const fusionData = await fusionRes.json();
 
                 plumesLayer.clearLayers();
                 observedLayer.clearLayers();
                 forecastLayer.clearLayers();
                 s5pLayer.clearLayers();
+                fusionLayer.clearLayers();
+
+                // Render Fusion Anomalies
+                if (fusionData && fusionData.length > 0) {
+                    fusionData.forEach(f => {
+                        L.circleMarker([f.source_lat, f.source_lon], {
+                            radius: 8, color: '#ff00ff', fillColor: '#ff00ff', fillOpacity: 0.8, className: 'blinking-dot'
+                        }).bindPopup(`
+                            <div style="background:#222; color:#ff00ff; padding:5px;">
+                                <b>⚠️ FUSION ANOMALY</b><br>
+                                ID: ${f.anomaly_id}<br>
+                                Status: ${f.status}<br>
+                                Confidence: ${(f.confidence_score * 100).toFixed(0)}%<br>
+                                Est. Rate: ${f.historical_emission_rate.toFixed(1)} kg/hr<br>
+                                <i>${f.message}</i>
+                            </div>
+                        `).addTo(fusionLayer);
+                    });
+                }
 
                 // Render S5P Macro Radar
                 if (s5pData && s5pData.length > 0) {

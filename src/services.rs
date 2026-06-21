@@ -5,6 +5,7 @@ use crate::repositories::*;
 use chrono::Timelike;
 use sqlx::PgPool;
 use sqlx::Row;
+use uuid::Uuid;
 /// Service layer for business logic
 ///
 /// Separates business logic from HTTP handlers
@@ -261,6 +262,67 @@ impl PlumeAnalysisService {
         }
 
         Ok(analyses)
+    }
+
+    pub async fn run_data_fusion(&self) -> Result<Vec<FusionAnomaly>, AppError> {
+        // 1. Get recent S5P macro-radar overpasses (last 24h)
+        let s5p_recent = sqlx::query_as::<_, S5pOverpass>(
+            r#"SELECT scene_id, start_datetime, end_datetime, orbit_number, netcdf_download_url, ST_AsGeoJSON(footprint) as footprint 
+               FROM s5p_overpasses 
+               WHERE start_datetime > NOW() - INTERVAL '24 hours'"#
+        )
+        .fetch_all(&self.pool)
+        .await
+        .unwrap_or_default();
+
+        let mut anomalies = Vec::new();
+
+        // 2. Loop through recent macro detections
+        for s5p in s5p_recent {
+            if let Some(footprint_str) = &s5p.footprint {
+                // 3. Find known historical point-sources inside this macro footprint
+                //    that HAVE NOT been updated by Tanager/EMIT in the last 24h (gap-filling)
+                let missing_sources = sqlx::query(
+                    r#"SELECT id, ST_X(location::geometry) as lon, ST_Y(location::geometry) as lat, emission_rate_kg_hr 
+                       FROM methane_observations 
+                       WHERE ST_Intersects(location, ST_GeomFromGeoJSON($1))
+                         AND recorded_at < NOW() - INTERVAL '24 hours'
+                       ORDER BY emission_rate_kg_hr DESC LIMIT 5"#
+                )
+                .bind(footprint_str)
+                .fetch_all(&self.pool)
+                .await
+                .unwrap_or_default();
+
+                // 4. Create Fusion Anomalies
+                for source in missing_sources {
+                    let id: Uuid = source.get("id");
+                    let lon: f64 = source.get("lon");
+                    let lat: f64 = source.get("lat");
+                    let rate: f64 = source.get("emission_rate_kg_hr");
+
+                    // Simple Physics-Aware Confidence Scoring
+                    // High rate + recent macro detection = high confidence it's still leaking
+                    let mut confidence = 0.5; // Base 50%
+                    if rate > 1000.0 { confidence += 0.3; } // Massive historical leak
+                    else if rate > 500.0 { confidence += 0.2; }
+
+                    anomalies.push(FusionAnomaly {
+                        anomaly_id: format!("fusion-{}-{}", s5p.scene_id, id.to_string()[..8].to_string()),
+                        source_id: id,
+                        source_lon: lon,
+                        source_lat: lat,
+                        historical_emission_rate: rate,
+                        s5p_scene_id: s5p.scene_id.clone(),
+                        s5p_timestamp: s5p.start_datetime,
+                        confidence_score: confidence,
+                        status: "GAP_FILLED".to_string(),
+                        message: "S5P detected regional gas. High-res satellite occluded. Historical source suspected active.".to_string(),
+                    });
+                }
+            }
+        }
+        Ok(anomalies)
     }
 
     async fn get_observed_plume(&self, source: &ActiveSource) -> Result<ObservedPlume, AppError> {

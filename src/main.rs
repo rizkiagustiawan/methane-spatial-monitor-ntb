@@ -201,6 +201,7 @@ async fn main() {
         .route("/api/plume-analysis", get(get_plume_analysis))
         .route("/api/zones", get(get_populated_zones))
         .route("/api/s5p", get(get_s5p_overpasses))
+        .route("/api/fusion", get(get_fusion_anomalies))
         .route("/ws", get(ws::ws_handler))
         .route("/api/stac", get(stac_root))
         .route("/api/stac/collections", get(stac_collections))
@@ -280,6 +281,27 @@ async fn get_s5p_overpasses(State(state): State<Arc<AppState>>) -> impl IntoResp
         axum::http::StatusCode::OK,
         axum::response::Json(serde_json::json!(response_data)),
     )
+}
+
+async fn get_fusion_anomalies(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    // Instantiate PlumeAnalysisService to use run_data_fusion
+    // In a real app, this might be stored in AppState or injected, but instantiating here for simplicity.
+    // It requires reqwest client and telegram tokens, so we create a dummy AlertService just to pass it.
+    let alert_svc = Arc::new(AlertService::new(
+        state.pool.clone(),
+        state.http_client.clone(),
+        state.config.telegram.bot_token.clone(),
+        state.config.telegram.chat_id.clone(),
+    ));
+    let fusion_svc = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
+
+    match fusion_svc.run_data_fusion().await {
+        Ok(anomalies) => (axum::http::StatusCode::OK, axum::response::Json(serde_json::json!(anomalies))).into_response(),
+        Err(e) => {
+            tracing::error!("Fusion error: {}", e);
+            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, axum::response::Json(serde_json::json!({"error": "Failed to run data fusion"}))).into_response()
+        }
+    }
 }
 
 // ─── API HANDLERS ────────────────────────────────────────────────────────────

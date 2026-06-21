@@ -158,6 +158,22 @@ pub struct MethanePlumeResponse {
     pub source: Option<String>,
 }
 
+// ─── Data Fusion Models ────────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Clone)]
+pub struct FusionAnomaly {
+    pub anomaly_id: String,
+    pub source_id: Uuid,
+    pub source_lon: f64,
+    pub source_lat: f64,
+    pub historical_emission_rate: f64,
+    pub s5p_scene_id: String,
+    pub s5p_timestamp: DateTime<Utc>,
+    pub confidence_score: f64,
+    pub status: String,
+    pub message: String,
+}
+
 // ─── Health / Stats ──────────────────────────────────────────────────────────
 
 #[derive(Debug, Serialize)]

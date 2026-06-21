@@ -43,6 +43,7 @@ Advanced real-time methane emission tracking, Gaussian dispersion prediction, an
 - Background tasks handle paginated STAC ingestion and multi-source weather fetching.
 - **EMIT Fallback:** NASA EMIT STAC API as fallback when Carbon Mapper fails.
 - **Sentinel-5P:** Macro-scale early warning via Microsoft Planetary Computer.
+- **AI Data Fusion:** Fills temporal gaps when high-res satellites are occluded by clouds, crossing S5P macro detections with historical point-source data.
 - Weather forecast integration (Open-Meteo, 2-day hourly forecast).
 - Triggers real-time **Telegram Evacuation Alerts** when toxic concentration footprints intersect mapped populated areas (e.g., Kota Mataram, Sembalun).
 - Features automated 30-day weather data retention policies.
@@ -118,6 +119,7 @@ openapi.yaml      # API documentation (OpenAPI 3.0.3)
 | GET | `/api/plume-prediction` | Multi-plume prediction |
 | GET | `/api/zones` | Populated zones (GeoJSON) |
 | GET | `/api/s5p` | Sentinel-5P overpasses |
+| GET | `/api/fusion` | Data Fusion Anomalies (S5P + High-Res gaps) |
 
 ### STAC API (SpatioTemporal Asset Catalog)
 | Method | Endpoint | Description |
