@@ -1,5 +1,5 @@
 # Builder Stage
-FROM rust:1.85-bookworm as builder
+FROM rust:1.88-bookworm as builder
 
 # Install GDAL and other build dependencies
 RUN apt-get update && apt-get install -y \
