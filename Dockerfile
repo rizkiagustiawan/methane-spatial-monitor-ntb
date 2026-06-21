@@ -21,11 +21,15 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y \
     libgdal32 \
     ca-certificates \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/local/bin
 COPY --from=builder /usr/src/app/target/release/geoesg-aeco-backend .
-COPY --from=builder /usr/src/app/ntb_dem.tif .
+
+# Download DEM file (not stored in git due to size)
+RUN wget -q https://github.com/rizkiagustiawan/methane-spatial-monitor-ntb/raw/main/ntb_dem.tif -O ntb_dem.tif || \
+    echo "Warning: DEM file download failed - terrain features may not work"
 
 # Expose the API port
 EXPOSE 3000
