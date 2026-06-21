@@ -236,6 +236,7 @@ pub struct BmkgForecastItem {
     pub wd: String,
     pub wd_deg: f64,
     #[serde(default)]
+    #[allow(dead_code)]
     pub tcc: f64, // Total Cloud Cover (%)
 }
 

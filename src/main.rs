@@ -702,12 +702,16 @@ async fn fetch_stac_items(pool: &Pool<Postgres>, limit: i64) -> Result<Vec<StacI
 /// - Clear: < 30% cloud cover
 /// - Partly cloudy: 30-70% cloud cover
 /// - Cloudy: > 70% cloud cover
-fn get_pasquill_stability_class(wind_speed_ms: f64, is_daytime: bool, cloud_cover_percent: f64) -> char {
+fn get_pasquill_stability_class(
+    wind_speed_ms: f64,
+    is_daytime: bool,
+    cloud_cover_percent: f64,
+) -> char {
     if is_daytime {
         // Daytime: consider cloud cover for solar radiation estimation
         // Clear sky (low cloud cover) = stronger insolation = more unstable
         // Cloudy sky (high cloud cover) = weaker insolation = more stable
-        
+
         if cloud_cover_percent < 30.0 {
             // Clear sky - strong insolation
             if wind_speed_ms < 3.0 {
@@ -730,8 +734,6 @@ fn get_pasquill_stability_class(wind_speed_ms: f64, is_daytime: bool, cloud_cove
             // Cloudy - weak insolation
             if wind_speed_ms < 3.0 {
                 'C' // Slightly unstable
-            } else if wind_speed_ms < 5.0 {
-                'D' // Neutral
             } else {
                 'D' // Neutral
             }
@@ -853,7 +855,7 @@ async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl 
         let ws = ws.unwrap_or(1.0);
         let wd = wd.unwrap_or(0.0);
         let hum = hum.unwrap_or(70.0);
-        let temp = temp.unwrap_or(25.0);
+        let _temp = temp.unwrap_or(25.0);
         let cloud_cover = 50.0; // Default to partly cloudy if not available
 
         // Apply humidity attenuation using Beer-Lambert Law
@@ -1108,11 +1110,11 @@ async fn get_plume_analysis(State(state): State<Arc<AppState>>) -> impl IntoResp
             let ws = ws.unwrap_or(1.0);
             let wd = wd.unwrap_or(0.0);
             let hum = hum.unwrap_or(70.0);
-            let temp = temp.unwrap_or(25.0);
+            let _temp = temp.unwrap_or(25.0);
 
             let is_daytime = valid_at.with_timezone(&wita_offset).hour() >= 6
                 && valid_at.with_timezone(&wita_offset).hour() < 18;
-            let forecast_hour = valid_at.with_timezone(&wita_offset).hour();
+            let _forecast_hour = valid_at.with_timezone(&wita_offset).hour();
 
             // Apply humidity attenuation using Beer-Lambert Law
             // Source: HITRAN Database, Radiative Transfer Theory
@@ -1934,7 +1936,9 @@ async fn weather_forecast_task(state: Arc<AppState>) {
             Ok(res) => {
                 if let Ok(forecasts) = res.json::<Vec<OpenMeteoForecastResponse>>().await {
                     for (idx, forecast) in forecasts.iter().enumerate() {
-                        if idx >= zones.len() { break; }
+                        if idx >= zones.len() {
+                            break;
+                        }
                         let (name, _, _) = zones[idx];
                         for i in 0..forecast.hourly.time.len() {
                             let valid_at = chrono::NaiveDateTime::parse_from_str(

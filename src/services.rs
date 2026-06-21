@@ -333,7 +333,7 @@ impl PlumeAnalysisService {
             // Apply humidity attenuation using Beer-Lambert Law
             // Source: HITRAN Database, Radiative Transfer Theory
             let humidity_factor = gaussian_plume::humidity_transmittance(hum);
-            let mut distance = ws * 3600.0 * humidity_factor;
+            let distance = ws * 3600.0 * humidity_factor;
 
             // Generate plume polygon
             let plume_geojson = self

@@ -197,24 +197,25 @@ pub mod gaussian_plume {
     /// - Solar radiation (insolation)
     /// - Cloud cover
     /// - Time of day
+    ///
     /// Estimate solar radiation (insolation) based on time of day and latitude
     /// Source: Turner (1970), simplified solar radiation model
     pub fn estimate_solar_radiation(hour: u32, latitude_deg: f64) -> f64 {
         let solar_noon = 12.0;
         let hour_f = hour as f64;
-        
+
         // Night time
-        if hour < 6 || hour > 18 {
+        if !(6..=18).contains(&hour) {
             return 0.0;
         }
-        
+
         // Solar elevation approximation (simplified)
         let time_offset = (hour_f - solar_noon).abs();
         let solar_factor = (1.0 - time_offset / 6.0).max(0.0);
-        
+
         // Latitude correction (higher latitude = lower radiation)
         let lat_correction = (latitude_deg.abs().to_radians().cos()).max(0.3);
-        
+
         // Clear sky approximation: ~1000 W/m² at solar noon
         1000.0 * solar_factor * lat_correction
     }
@@ -354,7 +355,8 @@ pub mod gaussian_plume {
         if measurement_height_m <= 0.0 || target_height_m <= 0.0 {
             return measured_wind_speed_ms;
         }
-        measured_wind_speed_ms * (target_height_m / measurement_height_m).powf(WIND_SHEAR_COEFFICIENT)
+        measured_wind_speed_ms
+            * (target_height_m / measurement_height_m).powf(WIND_SHEAR_COEFFICIENT)
     }
 
     /// Estimate wind profile at multiple heights
@@ -419,13 +421,14 @@ pub mod gaussian_plume {
         // Convert concentration from ppm to molecules/cm³
         // 1 ppm ≈ 2.5e13 molecules/cm³ at sea level
         let ch4_density = concentration_ppm * 2.5e13;
-        
+
         // Calculate optical depth: τ = σ * n * L
         // σ = 1.0e-21 cm²/molecule
         // n = ch4_density (molecules/cm³)
         // L = path_length_m * 100 (convert m to cm)
-        let optical_depth = CH4_ABSORPTION_CROSS_SECTION_CM2 * ch4_density * (path_length_m * 100.0);
-        
+        let optical_depth =
+            CH4_ABSORPTION_CROSS_SECTION_CM2 * ch4_density * (path_length_m * 100.0);
+
         // Transmittance: T = exp(-τ)
         (-optical_depth).exp()
     }
@@ -529,11 +532,8 @@ pub mod uncertainty {
         wind_speed_ms: f64,
     ) -> (f64, f64) {
         let wind_uncertainty = WIND_SPEED_UNCERTAINTY_MS;
-        let uncertainty_kg_hr = wind_uncertainty_emission(
-            emission_rate_kg_hr,
-            wind_speed_ms,
-            wind_uncertainty,
-        );
+        let uncertainty_kg_hr =
+            wind_uncertainty_emission(emission_rate_kg_hr, wind_speed_ms, wind_uncertainty);
         let min_rate = (emission_rate_kg_hr - uncertainty_kg_hr).max(0.0);
         let max_rate = emission_rate_kg_hr + uncertainty_kg_hr;
         (min_rate, max_rate)
