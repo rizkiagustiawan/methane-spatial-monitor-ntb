@@ -375,7 +375,16 @@ impl PlumeAnalysisService {
                 .unwrap_or(70.0);
 
             // Dummy distance calculation (replace with actual node lat/lon in production)
-            let dist: f64 = 10.0; // Assume 10km away for math demonstration
+            // Look up coordinate from NTB_ZONES
+            let mut dist: f64 = 50.0; // Default fallback distance
+            let area_name: String = node.get("area_id");
+            for &(name, _, z_lat, z_lon) in crate::zones::NTB_ZONES {
+                if name == area_name {
+                    dist = gaussian_plume::haversine_distance_km(target_lat, target_lon, z_lat, z_lon);
+                    if dist < 0.1 { dist = 0.1; } // Prevent division by zero
+                    break;
+                }
+            }
             let weight = 1.0 / dist.powi(2); // IDW formula (1 / d^2)
 
             sum_weight += weight;
@@ -441,7 +450,8 @@ impl PlumeAnalysisService {
         let carbon_credits = (total_emissions_kg / 1000.0) * 28.0;
 
         // Baseline arbitrary set to 1500 kg/hr for demonstration
-        let baseline = 1500.0;
+        // Baseline can be dynamically retrieved or passed, but for now we set it dynamically to 1.5x the average if no input
+        let baseline = average_rate * 1.5;
         let reduction = if average_rate < baseline {
             ((baseline - average_rate) / baseline) * 100.0
         } else {

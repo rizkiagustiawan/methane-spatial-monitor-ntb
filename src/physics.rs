@@ -449,6 +449,20 @@ pub mod gaussian_plume {
             (-alpha * HUMIDITY_PATH_LENGTH_M).exp()
         }
     }
+
+    /// Calculate Haversine distance between two coordinates in kilometers
+    pub fn haversine_distance_km(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+        let earth_radius_km = 6371.0;
+        let d_lat = (lat2 - lat1).to_radians();
+        let d_lon = (lon2 - lon1).to_radians();
+        let lat1_rad = lat1.to_radians();
+        let lat2_rad = lat2.to_radians();
+
+        let a = (d_lat / 2.0).sin().powi(2)
+            + lat1_rad.cos() * lat2_rad.cos() * (d_lon / 2.0).sin().powi(2);
+        let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
+        earth_radius_km * c
+    }
 }
 
 // ─── UNCERTAINTY QUANTIFICATION ─────────────────────────────────────────────
