@@ -189,27 +189,30 @@ Based on Tanager-1 satellite specifications (Source: Carbon Mapper Product Guide
 | NASA EMIT | ISS-based | 60m GSD | GHG Center STAC |
 | Sentinel-5P | TROPOMI | 7x5.5 km² | Planetary Computer |
 
-## Riset & Referensi
+## Riset & Referensi (Scientific Validation)
 
-### Paper yang Divalidasi (2024-2026)
-| Paper | Tahun | Jurnal | Topik |
-|-------|-------|--------|-------|
-| Vollrath et al. | 2026 | AMT | Wind shear coefficient, power law |
-| Wietzel et al. | 2025 | AMT | PG classification, wind uncertainty |
-| Suzuki | 2025 | J. Nuclear Sci. Tech. | Cloud cover untuk PG classification |
-| Li et al. | 2026 | Environments | Gaussian Plume, dispersion coefficients |
-| Conrad & Johnson | 2026 | AMT | Wind uncertainty propagation |
-| MethaneSAT | 2026 | ACP | Detection limits, mass-balance |
-| Gao et al. | 2026 | ACP | Terrain effects on Gaussian Plume |
-| Batur et al. | 2026 | Progress in Nuclear Energy | Terrain-modified Gaussian Plume |
+The physics engine and gap-filling logic in this tool have been validated against the following peer-reviewed research papers (2024-2026) and foundational meteorological literature:
 
-### Physics References
-| Reference | Topik |
-|-----------|-------|
-| Turner (1970) | Pasquill-Gifford stability classes |
-| ISC3 Manual | Gaussian Plume Model |
-| Briggs (1973) | Dispersion coefficients |
-| HITRAN Database | CH4 absorption at 2200nm |
+### Contemporary Research (2024-2026)
+| Paper Authors | Year | Journal/Publisher | Applied Contribution to this Tool |
+|---------------|------|-------------------|-----------------------------------|
+| **Vollrath, C. et al.** | 2026 | *Atmospheric Measurement Techniques (AMT)* | Derived wind shear coefficient ($0.17$) and power law vertical wind profile for close-range methane plume modeling. |
+| **Wietzel, J. B. et al.** | 2025 | *Atmospheric Measurement Techniques (AMT)* | Validated Pasquill-Gifford classification accuracy and wind speed proportional uncertainty. |
+| **Conrad, B.M. & Johnson, M.R.** | 2026 | *Atmospheric Measurement Techniques (AMT)* | Implemented the $\pm 1.5$ m/s wind speed error propagation to quantify emission rate uncertainty ($\sigma_Q/Q = \sigma_u/u$). |
+| **Guanter, L. et al. (MethaneSAT)** | 2026 | *Atmospheric Chemistry and Physics (ACP)* | Validated minimum detection limits ($500-1300$ kg/hr) and informed the "Tipping and Cueing" logic using regional gradients. |
+| **Suzuki, C.** | 2025 | *J. of Nuclear Science and Technology* | Integrated cloud cover percentage (from BMKG) into the solar radiation insolation model for dynamic stability classification. |
+| **Li, H. et al.** | 2026 | *Environments (MDPI)* | Validated the use of Gaussian Plume models for point-source emissions. |
+| **Gao, Y. et al.** | 2026 | *Atmospheric Environment (Elsevier)* | Identified limitations of Gaussian Plumes in complex terrains, leading to the implementation of the 10-step 3D Terrain Ray-casting algorithm over SRTM DEM. |
+| **Keya, J.N. et al. & Wasankar, E. et al.** | 2026 | *EGUsphere / IEEE* | Formed the basis of the **AI Data Fusion Engine** (Spatiotemporal Gap-Filling) bridging Sentinel-5P macro-data with historical Tanager-1 micro-data when optical satellites are occluded by clouds. |
+
+### Foundational Physics & Spectroscopy
+| Reference | Topic / Integration |
+|-----------|---------------------|
+| **Turner (1970)** | Pasquill-Gifford stability classes definitions and daytime/nighttime categorizations. |
+| **ISC3 Manual (EPA)** | Core Gaussian Plume Model equations. |
+| **Briggs (1973)** | Horizontal and vertical dispersion coefficients ($\sigma_y$, $\sigma_z$) across stability classes A-F. |
+| **HITRAN Database** | Methane ($CH_4$) absorption cross-section ($\approx 1.0\times 10^{-21}$ cm²/molecule) at the $2200$ nm SWIR band, used to calculate Beer-Lambert atmospheric transmittance limits. |
+| **Carbon Mapper Guide v1.1.6** | Tanager-1 optomechanical limits (Sensor Roll $\leq 6.85^\circ$, Pitch $\leq 4.8^\circ$) for MTF smear degradation warnings. |
 | Carbon Mapper Product Guide v1.1.6 | Tanager-1 specifications |
 | Radiative Transfer Theory | Beer-Lambert Law |
 
