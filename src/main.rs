@@ -257,15 +257,28 @@ async fn shutdown_signal() {
 
 async fn get_s5p_overpasses(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let records = sqlx::query_as::<_, S5pOverpass>(
-        "SELECT scene_id, start_datetime, end_datetime, orbit_number, netcdf_download_url FROM s5p_overpasses ORDER BY start_datetime DESC LIMIT 20"
+        "SELECT scene_id, start_datetime, end_datetime, orbit_number, netcdf_download_url, ST_AsGeoJSON(footprint) as footprint FROM s5p_overpasses ORDER BY start_datetime DESC LIMIT 20"
     )
     .fetch_all(&state.pool)
     .await
     .unwrap_or_default();
 
+    // Parse the geojson strings back into objects so they are sent as JSON
+    let mut response_data = Vec::new();
+    for rec in records {
+        response_data.push(serde_json::json!({
+            "scene_id": rec.scene_id,
+            "start_datetime": rec.start_datetime,
+            "end_datetime": rec.end_datetime,
+            "orbit_number": rec.orbit_number,
+            "netcdf_download_url": rec.netcdf_download_url,
+            "footprint": rec.footprint.and_then(|f| serde_json::from_str::<serde_json::Value>(&f).ok())
+        }));
+    }
+
     (
         axum::http::StatusCode::OK,
-        axum::response::Json(serde_json::json!(records)),
+        axum::response::Json(serde_json::json!(response_data)),
     )
 }
 

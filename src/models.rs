@@ -508,6 +508,7 @@ pub struct S5pOverpass {
     pub end_datetime: DateTime<Utc>,
     pub orbit_number: Option<i32>,
     pub netcdf_download_url: Option<String>,
+    pub footprint: Option<String>, // From ST_AsGeoJSON
 }
 
 #[derive(Debug, Deserialize)]
