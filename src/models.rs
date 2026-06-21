@@ -174,6 +174,36 @@ pub struct FusionAnomaly {
     pub message: String,
 }
 
+// ─── dMRV (digital Measurement, Reporting, Verification) ─────────────────
+// Source: Prajesh et al. (2026) - RSC Advances
+#[derive(Debug, Serialize, Clone)]
+pub struct MrvReport {
+    pub location_lon: f64,
+    pub location_lat: f64,
+    pub report_period_days: i32,
+    pub total_emissions_kg: f64,
+    pub average_rate_kg_hr: f64,
+    pub baseline_rate_kg_hr: f64,
+    pub estimated_reduction_percent: f64,
+    pub verification_confidence_score: f64,
+    pub detections_count: i64,
+    pub carbon_credits_equivalent_tons: f64, // 1 ton CH4 = 28 tons CO2e
+}
+
+// ─── Atmospheric Digital Twin (Spatial Interpolation) ─────────────────────
+// Source: Musayev et al. (2026) - AIAA SCITECH
+#[derive(Debug, Serialize, Clone)]
+pub struct AtmosphericState {
+    pub target_lon: f64,
+    pub target_lat: f64,
+    pub interpolated_wind_speed_ms: f64,
+    pub interpolated_wind_dir_deg: f64,
+    pub interpolated_temp_c: f64,
+    pub interpolated_humidity: f64,
+    pub computation_method: String,
+    pub nearest_nodes_used: usize,
+}
+
 // ─── Health / Stats ──────────────────────────────────────────────────────────
 
 #[derive(Debug, Serialize)]

@@ -48,7 +48,11 @@ Advanced real-time methane emission tracking, Gaussian dispersion prediction, an
 - Triggers real-time **Telegram Evacuation Alerts** when toxic concentration footprints intersect mapped populated areas (e.g., Kota Mataram, Sembalun).
 - Features automated 30-day weather data retention policies.
 
-### 6. **Resilient Architecture:**
+### 6. **Elite Tier Features (Research-Grade 2026):**
+- **Atmospheric Digital Twin (IDW):** Creates a continuous 3D weather grid by interpolating data from 110 weather nodes using Inverse Distance Weighting, allowing predictions even when satellites are occluded.
+- **dMRV (digital Measurement, Reporting, and Verification):** Automatic carbon-credit accounting engine converting hourly methane detections into monthly verifiable $\text{CO}_2e$ reduction reports for the Carbon Market.
+
+### 7. **Resilient Architecture:**
 - Typed error handling with `thiserror` (8 error types).
 - Enforced API rate-limiting (100 req/sec) via `tower-governor`.
 - Real-time `/api/metrics` (Prometheus-ready) and `/api/stats` endpoints.
@@ -120,6 +124,8 @@ openapi.yaml      # API documentation (OpenAPI 3.0.3)
 | GET | `/api/zones` | Populated zones (GeoJSON) |
 | GET | `/api/s5p` | Sentinel-5P overpasses |
 | GET | `/api/fusion` | Data Fusion Anomalies (S5P + High-Res gaps) |
+| GET | `/api/mrv/report` | dMRV Carbon Credits Accounting Report |
+| GET | `/api/digital-twin` | Interpolated 3D Atmospheric Twin data |
 
 ### STAC API (SpatioTemporal Asset Catalog)
 | Method | Endpoint | Description |
@@ -205,6 +211,8 @@ The physics engine and gap-filling logic in this tool have been validated agains
 | **Gao, Y. et al.** | 2026 | *Atmospheric Environment (Elsevier)* | Identified limitations of Gaussian Plumes in complex terrains, leading to the implementation of the 10-step 3D Terrain Ray-casting algorithm over SRTM DEM. |
 | **Batur, M. et al.** | 2026 | *Progress in Nuclear Energy* | Validated the use of Terrain-modified Gaussian Plume Models for dispersion predictions. |
 | **Keya, J.N. et al. & Wasankar, E. et al.** | 2026 | *EGUsphere / IEEE* | Formed the basis of the **AI Data Fusion Engine** (Spatiotemporal Gap-Filling) bridging Sentinel-5P macro-data with historical Tanager-1 micro-data when optical satellites are occluded by clouds. |
+| **Prajesh, P.J. et al.** | 2026 | *Environmental Science: Advances (RSC)* | Groundwork for the **dMRV API Engine** (`/api/mrv/report`), integrating satellite detection directly into carbon-credit reporting pipelines. |
+| **Musayev, Z. et al.** | 2026 | *AIAA SCITECH* | Rationale for the **Atmospheric Digital Twin** (`/api/digital-twin`) using spatial IDW interpolation to create continuous virtual environments for missing sensor nodes. |
 
 ### Foundational Physics & Spectroscopy
 | Reference | Topic / Integration |

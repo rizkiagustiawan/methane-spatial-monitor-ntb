@@ -202,6 +202,8 @@ async fn main() {
         .route("/api/zones", get(get_populated_zones))
         .route("/api/s5p", get(get_s5p_overpasses))
         .route("/api/fusion", get(get_fusion_anomalies))
+        .route("/api/mrv/report", get(get_mrv_report))
+        .route("/api/digital-twin", get(get_digital_twin))
         .route("/ws", get(ws::ws_handler))
         .route("/api/stac", get(stac_root))
         .route("/api/stac/collections", get(stac_collections))
@@ -728,6 +730,73 @@ async fn fetch_stac_items(pool: &Pool<Postgres>, limit: i64) -> Result<Vec<StacI
         .collect();
 
     Ok(items)
+}
+
+// ─── ELITE FEATURES HANDLERS ─────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+pub struct MrvParams {
+    lat: f64,
+    lon: f64,
+    radius: Option<f64>,
+}
+
+async fn get_mrv_report(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<MrvParams>,
+) -> impl IntoResponse {
+    let alert_svc = Arc::new(AlertService::new(
+        state.pool.clone(),
+        state.http_client.clone(),
+        state.config.telegram.bot_token.clone(),
+        state.config.telegram.chat_id.clone(),
+    ));
+    let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
+
+    let radius = params.radius.unwrap_or(5000.0);
+
+    match service
+        .generate_mrv_report(params.lon, params.lat, radius)
+        .await
+    {
+        Ok(report) => (axum::http::StatusCode::OK, axum::response::Json(report)).into_response(),
+        Err(e) => (
+            axum::http::StatusCode::NOT_FOUND,
+            axum::response::Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct TwinParams {
+    lat: f64,
+    lon: f64,
+}
+
+async fn get_digital_twin(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<TwinParams>,
+) -> impl IntoResponse {
+    let alert_svc = Arc::new(AlertService::new(
+        state.pool.clone(),
+        state.http_client.clone(),
+        state.config.telegram.bot_token.clone(),
+        state.config.telegram.chat_id.clone(),
+    ));
+    let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
+
+    match service
+        .interpolate_weather_at_point(params.lon, params.lat)
+        .await
+    {
+        Ok(twin) => (axum::http::StatusCode::OK, axum::response::Json(twin)).into_response(),
+        Err(e) => (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            axum::response::Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
 }
 
 // ─── PHYSICS & DISPERSION ────────────────────────────────────────────────────
