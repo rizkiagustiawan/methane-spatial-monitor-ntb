@@ -203,6 +203,7 @@ The physics engine and gap-filling logic in this tool have been validated agains
 | **Suzuki, C.** | 2025 | *J. of Nuclear Science and Technology* | Integrated cloud cover percentage (from BMKG) into the solar radiation insolation model for dynamic stability classification. |
 | **Li, H. et al.** | 2026 | *Environments (MDPI)* | Validated the use of Gaussian Plume models for point-source emissions. |
 | **Gao, Y. et al.** | 2026 | *Atmospheric Environment (Elsevier)* | Identified limitations of Gaussian Plumes in complex terrains, leading to the implementation of the 10-step 3D Terrain Ray-casting algorithm over SRTM DEM. |
+| **Batur, M. et al.** | 2026 | *Progress in Nuclear Energy* | Validated the use of Terrain-modified Gaussian Plume Models for dispersion predictions. |
 | **Keya, J.N. et al. & Wasankar, E. et al.** | 2026 | *EGUsphere / IEEE* | Formed the basis of the **AI Data Fusion Engine** (Spatiotemporal Gap-Filling) bridging Sentinel-5P macro-data with historical Tanager-1 micro-data when optical satellites are occluded by clouds. |
 
 ### Foundational Physics & Spectroscopy
