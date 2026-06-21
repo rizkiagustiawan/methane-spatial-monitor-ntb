@@ -380,8 +380,11 @@ impl PlumeAnalysisService {
             let area_name: String = node.get("area_id");
             for &(name, _, z_lat, z_lon) in crate::zones::NTB_ZONES {
                 if name == area_name {
-                    dist = gaussian_plume::haversine_distance_km(target_lat, target_lon, z_lat, z_lon);
-                    if dist < 0.1 { dist = 0.1; } // Prevent division by zero
+                    dist =
+                        gaussian_plume::haversine_distance_km(target_lat, target_lon, z_lat, z_lon);
+                    if dist < 0.1 {
+                        dist = 0.1;
+                    } // Prevent division by zero
                     break;
                 }
             }
