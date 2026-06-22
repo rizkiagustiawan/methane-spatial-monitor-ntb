@@ -1798,7 +1798,8 @@ async fn s5p_tracker_task(state: Arc<AppState>) {
             "bbox": bbox,
             "datetime": format!("2024-01-01T00:00:00Z/{}", Utc::now().format("%Y-%m-%dT%H:%M:%SZ")),
             "query": {
-                "s5p:product_type": {"eq": "L2__CH4___"}
+                "s5p:product_type": {"eq": "L2__CH4___"},
+                "eo:cloud_cover": {"lte": 70}
             },
             "limit": 10
         });
