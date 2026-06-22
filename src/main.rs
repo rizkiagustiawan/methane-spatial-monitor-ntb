@@ -212,6 +212,7 @@ async fn main() {
         .route("/api/esg/compliance", get(get_esg_compliance))
         .route("/api/audit/export", get(get_audit_export))
         .route("/api/audit/methodology", get(get_methodology))
+        .route("/api/synthetic/plumes", get(get_synthetic_plumes))
         .route("/ws", get(ws::ws_handler))
         .route("/api/stac", get(stac_root))
         .route("/api/stac/collections", get(stac_collections))
@@ -607,6 +608,62 @@ async fn get_weather_forecast(
         .collect();
 
     Ok((StatusCode::OK, AxumJson(json!(forecasts))))
+}
+
+use rand::Rng;
+
+#[derive(serde::Deserialize)]
+struct SyntheticParams {
+    count: usize,
+}
+
+#[derive(serde::Serialize)]
+struct SyntheticPlumeData {
+    emission_rate_kg_hr: f64,
+    wind_speed_ms: f64,
+    stability_class: char,
+    concentration_1km_ppm: f64,
+    is_detectable_by_s5p: bool,
+}
+
+async fn get_synthetic_plumes(
+    Query(params): Query<SyntheticParams>,
+) -> impl IntoResponse {
+    let count = params.count.clamp(1, 10000);
+    let mut rng = rand::thread_rng();
+    let mut dataset = Vec::with_capacity(count);
+
+    let classes = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+    for _ in 0..count {
+        // Randomize physics parameters
+        let emission = rng.gen_range(50.0..5000.0);
+        let wind = rng.gen_range(1.0..10.0);
+        let stability = classes[rng.gen_range(0..6)];
+        
+        // Use our physics engine
+        let conc = calc_gaussian_concentration_1km(emission, wind, stability);
+        
+        // Apply TROPOMI limit (S5P typically needs massive plumes > 1000 kg/hr to see from space)
+        let is_detectable = emission > 1000.0;
+
+        dataset.push(SyntheticPlumeData {
+            emission_rate_kg_hr: emission,
+            wind_speed_ms: wind,
+            stability_class: stability,
+            concentration_1km_ppm: conc,
+            is_detectable_by_s5p: is_detectable,
+        });
+    }
+
+    (
+        axum::http::StatusCode::OK,
+        axum::response::Json(serde_json::json!({
+            "source": "STARCOP Synthetic Augmentation (Ruzicka 2023)",
+            "count": dataset.len(),
+            "data": dataset
+        })),
+    ).into_response()
 }
 
 // ─── STAC API HANDLERS ───────────────────────────────────────────────────────
