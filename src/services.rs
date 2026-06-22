@@ -301,15 +301,20 @@ impl PlumeAnalysisService {
                     let lat: f64 = source.get("lat");
                     let rate: f64 = source.get("emission_rate_kg_hr");
 
-                    // Simple Physics-Aware Confidence Scoring
-                    // High rate + recent macro detection = high confidence it's still leaking
-                    let mut confidence = 0.5; // Base 50%
+                    // Physics-Aware Confidence Scoring with Multi-Satellite Cross-Validation
+                    // S5P enhanced + historical high rate
+                    let mut confidence = 0.6; // Base 60% (Medium - S5P confirms regional, but point source unconfirmed today)
+                    
                     if rate > 1000.0 {
-                        confidence += 0.3;
+                        confidence += 0.2; // 80% if historical leak was massive
                     }
-                    // Massive historical leak
-                    else if rate > 500.0 {
-                        confidence += 0.2;
+                    
+                    // Cross-validation message
+                    let mut msg = "S5P detected regional gas. High-res satellite occluded. ".to_string();
+                    if confidence >= 0.8 {
+                        msg.push_str("Historical source was massive, high probability still active.");
+                    } else {
+                        msg.push_str("Historical source suspected active (possible false positive without high-res confirmation).");
                     }
 
                     anomalies.push(FusionAnomaly {
@@ -321,8 +326,8 @@ impl PlumeAnalysisService {
                         s5p_scene_id: s5p.scene_id.clone(),
                         s5p_timestamp: s5p.start_datetime,
                         confidence_score: confidence,
-                        status: "GAP_FILLED".to_string(),
-                        message: "S5P detected regional gas. High-res satellite occluded. Historical source suspected active.".to_string(),
+                        status: if confidence >= 0.8 { "HIGH_CONFIDENCE".to_string() } else { "MEDIUM_CONFIDENCE".to_string() },
+                        message: msg,
                     });
                 }
             }
