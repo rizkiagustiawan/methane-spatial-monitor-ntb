@@ -586,6 +586,82 @@ pub struct PlanetaryComputerAsset {
     pub href: String,
 }
 
+// ─── ESG Reporting Models ────────────────────────────────────────────────────
+// Source: GHG Protocol Corporate Standard, ISO 14064-1:2018, IPCC AR6
+
+/// GHG Protocol compliant emission report
+/// Source: GHG Protocol Corporate Standard (2004)
+#[derive(Debug, Serialize, Clone)]
+pub struct GhgEmissionReport {
+    pub report_id: String,
+    pub facility_name: String,
+    pub facility_lat: f64,
+    pub facility_lon: f64,
+    pub reporting_period_start: DateTime<Utc>,
+    pub reporting_period_end: DateTime<Utc>,
+    pub scope1_emissions_tonnes_co2e: f64,
+    pub uncertainty_percent: f64,
+    pub methodology: String,
+    pub data_sources: Vec<String>,
+    pub emission_factors: Vec<EmissionFactor>,
+    pub gwp_reference: String,
+    pub disclaimer: String,
+}
+
+/// Emission factor with uncertainty
+/// Source: IPCC AR6 (2021)
+#[derive(Debug, Serialize, Clone)]
+pub struct EmissionFactor {
+    pub gas: String,
+    pub factor_kg_per_unit: f64,
+    pub unit: String,
+    pub gwp_100yr: f64,
+    pub source: String,
+    pub uncertainty_percent: f64,
+}
+
+/// Historical emission trend
+#[derive(Debug, Serialize, Clone)]
+pub struct EmissionTrend {
+    pub period: String,
+    pub avg_emission_rate_kg_hr: f64,
+    pub total_emissions_tonnes: f64,
+    pub uncertainty_tonnes: f64,
+    pub data_points: i64,
+    pub trend_direction: String, // "increasing", "decreasing", "stable"
+    pub trend_percent_change: f64,
+}
+
+/// Carbon credit equivalent
+/// Source: IPCC AR6 GWP values
+#[derive(Debug, Serialize, Clone)]
+pub struct CarbonCreditReport {
+    pub total_ch4_tonnes: f64,
+    pub total_co2e_tonnes: f64,
+    pub gwp_factor: f64,
+    pub uncertainty_tonnes: f64,
+    pub baseline_period: String,
+    pub current_period: String,
+    pub reduction_percent: f64,
+    pub potential_credits: f64,
+    pub methodology: String,
+    pub disclaimer: String,
+}
+
+/// ESG Compliance Summary
+#[derive(Debug, Serialize, Clone)]
+pub struct EsgComplianceSummary {
+    pub facility_name: String,
+    pub reporting_period: String,
+    pub total_emissions_co2e: f64,
+    pub uncertainty_percent: f64,
+    pub compliance_status: String,
+    pub ghg_protocol_compliant: bool,
+    pub iso14064_compliant: bool,
+    pub recommendations: Vec<String>,
+    pub data_quality_score: f64, // 0-100
+}
+
 #[cfg(test)]
 mod emit_tests {
     use super::*;

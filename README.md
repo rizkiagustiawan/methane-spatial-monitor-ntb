@@ -127,6 +127,14 @@ openapi.yaml      # API documentation (OpenAPI 3.0.3)
 | GET | `/api/mrv/report` | dMRV Carbon Credits Accounting Report |
 | GET | `/api/digital-twin` | Interpolated 3D Atmospheric Twin data |
 
+### ESG Reporting API
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/esg/report` | GHG Protocol compliant emission report |
+| GET | `/api/esg/trend` | Historical emission trend analysis |
+| GET | `/api/esg/carbon-credits` | Carbon credit calculation (CO2e) |
+| GET | `/api/esg/compliance` | ESG compliance summary |
+
 ### STAC API (SpatioTemporal Asset Catalog)
 | Method | Endpoint | Description |
 |--------|----------|-------------|

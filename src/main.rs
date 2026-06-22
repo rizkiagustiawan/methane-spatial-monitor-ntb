@@ -206,6 +206,10 @@ async fn main() {
         .route("/api/fusion", get(get_fusion_anomalies))
         .route("/api/mrv/report", get(get_mrv_report))
         .route("/api/digital-twin", get(get_digital_twin))
+        .route("/api/esg/report", get(get_ghg_report))
+        .route("/api/esg/trend", get(get_emission_trend))
+        .route("/api/esg/carbon-credits", get(get_carbon_credits))
+        .route("/api/esg/compliance", get(get_esg_compliance))
         .route("/ws", get(ws::ws_handler))
         .route("/api/stac", get(stac_root))
         .route("/api/stac/collections", get(stac_collections))
@@ -795,6 +799,120 @@ async fn get_digital_twin(
         Ok(twin) => (axum::http::StatusCode::OK, axum::response::Json(twin)).into_response(),
         Err(e) => (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            axum::response::Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+// ─── ESG REPORTING HANDLERS ──────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+pub struct EsgParams {
+    lat: f64,
+    lon: f64,
+    radius: Option<f64>,
+    name: Option<String>,
+    period: Option<i64>,
+    baseline: Option<i64>,
+    current: Option<i64>,
+}
+
+async fn get_ghg_report(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<EsgParams>,
+) -> impl IntoResponse {
+    let alert_svc = Arc::new(AlertService::new(
+        state.pool.clone(),
+        state.http_client.clone(),
+        state.config.telegram.bot_token.clone(),
+        state.config.telegram.chat_id.clone(),
+    ));
+    let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
+    
+    let name = params.name.unwrap_or_else(|| "Unknown Facility".to_string());
+    let radius = params.radius.unwrap_or(5000.0);
+    let period = params.period.unwrap_or(30);
+
+    match service.generate_ghg_report(&name, params.lon, params.lat, radius, period).await {
+        Ok(report) => (axum::http::StatusCode::OK, axum::response::Json(report)).into_response(),
+        Err(e) => (
+            axum::http::StatusCode::NOT_FOUND,
+            axum::response::Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+async fn get_emission_trend(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<EsgParams>,
+) -> impl IntoResponse {
+    let alert_svc = Arc::new(AlertService::new(
+        state.pool.clone(),
+        state.http_client.clone(),
+        state.config.telegram.bot_token.clone(),
+        state.config.telegram.chat_id.clone(),
+    ));
+    let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
+    let radius = params.radius.unwrap_or(5000.0);
+
+    match service.generate_emission_trend(params.lon, params.lat, radius).await {
+        Ok(trends) => (axum::http::StatusCode::OK, axum::response::Json(trends)).into_response(),
+        Err(e) => (
+            axum::http::StatusCode::NOT_FOUND,
+            axum::response::Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+async fn get_carbon_credits(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<EsgParams>,
+) -> impl IntoResponse {
+    let alert_svc = Arc::new(AlertService::new(
+        state.pool.clone(),
+        state.http_client.clone(),
+        state.config.telegram.bot_token.clone(),
+        state.config.telegram.chat_id.clone(),
+    ));
+    let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
+    
+    let name = params.name.unwrap_or_else(|| "Unknown Facility".to_string());
+    let radius = params.radius.unwrap_or(5000.0);
+    let baseline = params.baseline.unwrap_or(90);
+    let current = params.current.unwrap_or(30);
+
+    match service.generate_carbon_credit_report(&name, params.lon, params.lat, radius, baseline, current).await {
+        Ok(report) => (axum::http::StatusCode::OK, axum::response::Json(report)).into_response(),
+        Err(e) => (
+            axum::http::StatusCode::NOT_FOUND,
+            axum::response::Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+async fn get_esg_compliance(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<EsgParams>,
+) -> impl IntoResponse {
+    let alert_svc = Arc::new(AlertService::new(
+        state.pool.clone(),
+        state.http_client.clone(),
+        state.config.telegram.bot_token.clone(),
+        state.config.telegram.chat_id.clone(),
+    ));
+    let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
+    
+    let name = params.name.unwrap_or_else(|| "Unknown Facility".to_string());
+    let radius = params.radius.unwrap_or(5000.0);
+
+    match service.generate_esg_summary(&name, params.lon, params.lat, radius).await {
+        Ok(summary) => (axum::http::StatusCode::OK, axum::response::Json(summary)).into_response(),
+        Err(e) => (
+            axum::http::StatusCode::NOT_FOUND,
             axum::response::Json(serde_json::json!({"error": e.to_string()})),
         )
             .into_response(),
