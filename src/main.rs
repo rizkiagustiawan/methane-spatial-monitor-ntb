@@ -17,6 +17,9 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
+// Type alias for the compiled ONNX model
+type FusionModel = SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>;
+
 mod config;
 mod errors;
 mod models;
@@ -40,6 +43,9 @@ use zones::NTB_ZONES;
 
 // ─── STATE & UTILS ───────────────────────────────────────────────────────────
 
+use tract_onnx::prelude::*;
+use std::path::Path;
+
 struct AppState {
     pool: Pool<Postgres>,
     http_client: reqwest::Client,
@@ -51,6 +57,7 @@ struct AppState {
     last_emit_fetch: std::sync::RwLock<Option<DateTime<Utc>>>,
     last_s5p_fetch: std::sync::RwLock<Option<DateTime<Utc>>>,
     start_time: std::time::Instant,
+    fusion_model: Option<FusionModel>, // Add this
 }
 
 fn get_elevation_at_point(lon: f64, lat: f64) -> Option<f32> {
@@ -106,6 +113,28 @@ async fn main() {
 
     let app_config = AppConfig::from_env().expect("Invalid configuration");
 
+    // Attempt to load ONNX fusion model
+    let model_path = Path::new("ml/fusion_model.onnx");
+    let fusion_model = if model_path.exists() {
+        match tract_onnx::onnx()
+            .model_for_path(model_path)
+            .and_then(|model| model.into_optimized())
+            .and_then(|model| model.into_runnable()) 
+        {
+            Ok(model) => {
+                info!("Successfully loaded ONNX fusion model");
+                Some(model)
+            }
+            Err(e) => {
+                error!("Failed to load ONNX model: {}", e);
+                None
+            }
+        }
+    } else {
+        warn!("ONNX model not found at ml/fusion_model.onnx. Falling back to heuristic fusion.");
+        None
+    };
+
     let pool = PgPoolOptions::new()
         .max_connections(app_config.database.max_connections)
         .min_connections(app_config.database.min_connections)
@@ -132,6 +161,7 @@ async fn main() {
         last_emit_fetch: std::sync::RwLock::new(None),
         last_s5p_fetch: std::sync::RwLock::new(None),
         start_time: std::time::Instant::now(),
+        fusion_model,
     });
 
     // START BACKGROUND TASKS
