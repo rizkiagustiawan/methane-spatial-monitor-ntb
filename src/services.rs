@@ -1,4 +1,5 @@
 use crate::errors::AppError;
+use tract_onnx::prelude::*;
 use crate::models::*;
 use crate::physics::*;
 use crate::repositories::*;
@@ -217,14 +218,20 @@ impl AlertService {
 pub struct PlumeAnalysisService {
     pool: PgPool,
     alert_service: Arc<AlertService>,
+    fusion_model: Option<SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>>,
 }
 
 #[allow(dead_code)]
 impl PlumeAnalysisService {
-    pub fn new(pool: PgPool, alert_service: Arc<AlertService>) -> Self {
+    pub fn new(
+        pool: PgPool, 
+        alert_service: Arc<AlertService>,
+        fusion_model: Option<SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>>,
+    ) -> Self {
         Self {
             pool,
             alert_service,
+            fusion_model,
         }
     }
 

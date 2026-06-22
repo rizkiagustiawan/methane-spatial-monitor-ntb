@@ -334,7 +334,11 @@ async fn get_fusion_anomalies(State(state): State<Arc<AppState>>) -> impl IntoRe
         state.config.telegram.bot_token.clone(),
         state.config.telegram.chat_id.clone(),
     ));
-    let fusion_svc = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
+    let fusion_svc = PlumeAnalysisService::new(
+        state.pool.clone(),
+        alert_svc,
+        state.fusion_model.clone()
+    );
 
     match fusion_svc.run_data_fusion().await {
         Ok(anomalies) => (
@@ -846,7 +850,11 @@ async fn get_mrv_report(
         state.config.telegram.bot_token.clone(),
         state.config.telegram.chat_id.clone(),
     ));
-    let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
+    let service = PlumeAnalysisService::new(
+        state.pool.clone(),
+        alert_svc,
+        state.fusion_model.clone()
+    );
 
     let radius = params.radius.unwrap_or(5000.0);
 
@@ -879,7 +887,11 @@ async fn get_digital_twin(
         state.config.telegram.bot_token.clone(),
         state.config.telegram.chat_id.clone(),
     ));
-    let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
+    let service = PlumeAnalysisService::new(
+        state.pool.clone(),
+        alert_svc,
+        state.fusion_model.clone()
+    );
 
     match service
         .interpolate_weather_at_point(params.lon, params.lat)
@@ -917,7 +929,11 @@ async fn get_ghg_report(
         state.config.telegram.bot_token.clone(),
         state.config.telegram.chat_id.clone(),
     ));
-    let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
+    let service = PlumeAnalysisService::new(
+        state.pool.clone(),
+        alert_svc,
+        state.fusion_model.clone()
+    );
 
     let name = params
         .name
@@ -948,7 +964,11 @@ async fn get_emission_trend(
         state.config.telegram.bot_token.clone(),
         state.config.telegram.chat_id.clone(),
     ));
-    let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
+    let service = PlumeAnalysisService::new(
+        state.pool.clone(),
+        alert_svc,
+        state.fusion_model.clone()
+    );
     let radius = params.radius.unwrap_or(5000.0);
 
     match service
@@ -974,7 +994,11 @@ async fn get_carbon_credits(
         state.config.telegram.bot_token.clone(),
         state.config.telegram.chat_id.clone(),
     ));
-    let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
+    let service = PlumeAnalysisService::new(
+        state.pool.clone(),
+        alert_svc,
+        state.fusion_model.clone()
+    );
 
     let name = params
         .name
@@ -1006,7 +1030,11 @@ async fn get_esg_compliance(
         state.config.telegram.bot_token.clone(),
         state.config.telegram.chat_id.clone(),
     ));
-    let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
+    let service = PlumeAnalysisService::new(
+        state.pool.clone(),
+        alert_svc,
+        state.fusion_model.clone()
+    );
 
     let name = params
         .name
@@ -1038,7 +1066,11 @@ async fn get_audit_export(
         state.config.telegram.bot_token.clone(),
         state.config.telegram.chat_id.clone(),
     ));
-    let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
+    let service = PlumeAnalysisService::new(
+        state.pool.clone(),
+        alert_svc,
+        state.fusion_model.clone()
+    );
 
     let name = params
         .name
