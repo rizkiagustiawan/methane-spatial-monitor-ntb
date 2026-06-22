@@ -213,12 +213,14 @@ impl AlertService {
     }
 }
 
+pub type FusionModel = SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>;
+
 /// Plume analysis service
 #[allow(dead_code)]
 pub struct PlumeAnalysisService {
     pool: PgPool,
     alert_service: Arc<AlertService>,
-    fusion_model: Option<SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>>,
+    fusion_model: Option<FusionModel>,
 }
 
 #[allow(dead_code)]
@@ -226,7 +228,7 @@ impl PlumeAnalysisService {
     pub fn new(
         pool: PgPool, 
         alert_service: Arc<AlertService>,
-        fusion_model: Option<SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>>,
+        fusion_model: Option<FusionModel>,
     ) -> Self {
         Self {
             pool,
