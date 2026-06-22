@@ -50,7 +50,7 @@ Advanced real-time methane emission tracking, Gaussian dispersion prediction, an
 
 ### 6. **Elite Tier Features (Research-Grade 2026):**
 - **Atmospheric Digital Twin (IDW):** Creates a continuous 3D weather grid by interpolating data from 110 weather nodes using Inverse Distance Weighting, allowing predictions even when satellites are occluded.
-- **dMRV (digital Measurement, Reporting, and Verification):** Automatic carbon-credit accounting engine converting hourly methane detections into monthly verifiable $\text{CO}_2e$ reduction reports for the Carbon Market.
+- **dMRV (digital Measurement, Reporting, and Verification):** Automatic carbon-credit accounting engine converting hourly methane detections into monthly verifiable $\text{CO}_2e$ reduction reports for the Carbon Market. Uses MAX emission rate from last 90 days as historical baseline.
 
 ### 7. **Resilient Architecture:**
 - Typed error handling with `thiserror` (8 error types).
@@ -165,6 +165,8 @@ Based on Tanager-1 satellite specifications (Source: Carbon Mapper Product Guide
 | Wind Uncertainty | ±1.5 m/s | Conrad & Johnson (2026) |
 | Wind Shear Coefficient | 0.17 | Vollrath et al. (2026) |
 | CH4 Absorption (2200nm) | 1.0e-21 cm²/molecule | HITRAN Database |
+| Cloud Cover Integration | BMKG `tcc` field | Suzuki (2025) |
+| dMRV Baseline | MAX emission 90 days | Prajesh et al. (2026) |
 
 ## Data Sources & Coverage
 
@@ -275,3 +277,4 @@ Proprietary - GeoESG A.E.C.O
 - **Conrad & Johnson (2026)** for wind uncertainty propagation
 - **Musayev et al. (2026)** for Atmospheric Digital Twin methodologies
 - **Prajesh et al. (2026)** for dMRV Carbon Credit integration frameworks
+- **Suzuki (2025)** for cloud cover integration in PG classification
