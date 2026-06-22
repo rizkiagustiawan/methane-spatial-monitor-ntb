@@ -39,6 +39,30 @@
         .stat-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px; }
         .stat-val { color: #0f0; font-weight: bold; }
 
+        .mrv-panel {
+            position: absolute; top: 110px; right: 20px; z-index: 1000;
+            background: rgba(0,0,0,0.9); border: 1px solid #ffd700; padding: 15px;
+            width: 320px; display: none; max-height: 60vh; overflow-y: auto;
+        }
+        .mrv-panel h3 { margin: 0 0 10px 0; color: #ffd700; border-bottom: 1px solid #444; padding-bottom: 5px; }
+        .mrv-panel .mrv-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px; }
+        .mrv-panel .mrv-val { color: #ffd700; font-weight: bold; }
+
+        .twin-panel {
+            position: absolute; top: 110px; left: 20px; z-index: 1000;
+            background: rgba(0,0,0,0.9); border: 1px solid #00bfff; padding: 15px;
+            width: 260px; display: none;
+        }
+        .twin-panel h3 { margin: 0 0 10px 0; color: #00bfff; border-bottom: 1px solid #444; padding-bottom: 5px; }
+        .twin-panel .twin-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px; }
+        .twin-panel .twin-val { color: #00bfff; font-weight: bold; }
+
+        .click-hint {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; background: rgba(0,0,0,0.6); color: #888;
+            padding: 6px 16px; font-size: 12px; border: 1px solid #333;
+        }
+
         .legend {
             position: absolute; bottom: 20px; right: 20px; z-index: 1000;
             background: rgba(0,0,0,0.8); border: 1px solid #555; padding: 15px;
@@ -58,7 +82,24 @@
         <div class="stat-row"><span>Max Emission:</span> <span id="statMax" class="stat-val">-</span></div>
         <div class="stat-row"><span>Active Alerts:</span> <span id="statAlerts" class="stat-val" style="color:red">-</span></div>
         <div class="stat-row"><span>Weather Node:</span> <span id="statWeather" class="stat-val">-</span></div>
+        <div class="stat-row"><span>Total CO2e Saved:</span> <span id="statCO2e" class="stat-val" style="color:#ffd700">-</span></div>
     </div>
+
+    <div class="mrv-panel" id="mrvPanel">
+        <h3>dMRV CARBON REPORT</h3>
+        <div id="mrvContent">
+            <p style="color:#888; font-size:12px;">Click on a point source on the map to generate a 30-day carbon credit verification report.</p>
+        </div>
+    </div>
+
+    <div class="twin-panel" id="twinPanel">
+        <h3>DIGITAL TWIN WEATHER</h3>
+        <div id="twinContent">
+            <p style="color:#888; font-size:12px;">Click anywhere on the map to see interpolated atmospheric conditions.</p>
+        </div>
+    </div>
+
+    <div class="click-hint">Click anywhere on the map for Digital Twin weather | Click on a plume for dMRV report</div>
 
     <div class="legend">
         <div class="legend-item"><div class="legend-color" style="background:#0f0; border-radius:50%"></div> Methane Plume Source</div>
@@ -68,6 +109,8 @@
         <div class="legend-item"><div class="legend-color" style="background:rgba(100,100,255,0.2)"></div> Populated Zone</div>
         <div class="legend-item"><div class="legend-color" style="border-color:#00ffff; background:rgba(0,255,255,0.05); border-style:dashed"></div> S5P Macro Radar</div>
         <div class="legend-item"><div class="legend-color" style="background:#ff00ff; border-radius:50%"></div> Data Fusion Anomaly</div>
+        <div class="legend-item"><div class="legend-color" style="background:#00bfff; border-radius:50%"></div> Digital Twin (Click)</div>
+        <div class="legend-item"><div class="legend-color" style="background:#ffd700; border-radius:2px"></div> dMRV Carbon Report</div>
     </div>
 
     <div id="map"></div>
@@ -328,7 +371,20 @@
                     };
                     L.geoJSON(geoJson, {
                         pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 6, color: '#000', fillColor: '#0f0', fillOpacity: 1 }),
-                        onEachFeature: (f, l) => l.bindPopup(`Source: ${f.properties.source}<br>Rate: ${f.properties.rate.toFixed(1)} kg/hr<br>Time: ${new Date(f.properties.time).toLocaleString()}`)
+                        onEachFeature: (f, l) => {
+                            const coords = f.geometry.coordinates;
+                            l.bindPopup(`
+                                <div style="background:#222; color:#0f0; padding:5px;">
+                                    <b>Source:</b> ${f.properties.source}<br>
+                                    <b>Rate:</b> ${f.properties.rate.toFixed(1)} kg/hr<br>
+                                    <b>Time:</b> ${new Date(f.properties.time).toLocaleString()}<br>
+                                    <hr style="border-color:#444">
+                                    <button onclick="fetchMrvReport(${coords[1]}, ${coords[0]})" style="background:#ffd700; color:#000; border:none; padding:4px 8px; cursor:pointer; font-weight:bold; width:100%;">
+                                        Generate dMRV Carbon Report
+                                    </button>
+                                </div>
+                            `);
+                        }
                     }).addTo(plumesLayer);
                 }
 
@@ -358,6 +414,88 @@
         connectWebSocket();
         setInterval(fetchData, 60000);
         setInterval(fetchHealth, 60000);
+
+        // ─── Digital Twin: Click anywhere on map ───────────────────────
+        map.on('click', async function(e) {
+            const lat = e.latlng.lat;
+            const lon = e.latlng.lng;
+
+            // Show Digital Twin panel
+            document.getElementById('twinPanel').style.display = 'block';
+            document.getElementById('twinContent').innerHTML = '<p style="color:#00bfff;">Interpolating atmospheric state...</p>';
+
+            try {
+                const res = await fetch(`/api/digital-twin?lat=${lat}&lon=${lon}`);
+                if (res.ok) {
+                    const twin = await res.json();
+                    document.getElementById('twinContent').innerHTML = `
+                        <div class="twin-row"><span>Location:</span> <span class="twin-val">${twin.target_lat.toFixed(4)}, ${twin.target_lon.toFixed(4)}</span></div>
+                        <div class="twin-row"><span>Wind Speed:</span> <span class="twin-val">${twin.interpolated_wind_speed_ms.toFixed(1)} m/s</span></div>
+                        <div class="twin-row"><span>Wind Dir:</span> <span class="twin-val">${twin.interpolated_wind_dir_deg.toFixed(0)}°</span></div>
+                        <div class="twin-row"><span>Temperature:</span> <span class="twin-val">${twin.interpolated_temp_c.toFixed(1)}°C</span></div>
+                        <div class="twin-row"><span>Humidity:</span> <span class="twin-val">${twin.interpolated_humidity.toFixed(0)}%</span></div>
+                        <div class="twin-row"><span>Method:</span> <span class="twin-val" style="color:#888">${twin.computation_method}</span></div>
+                        <div class="twin-row"><span>Nodes Used:</span> <span class="twin-val">${twin.nearest_nodes_used}</span></div>
+                    `;
+
+                    // Add a temporary marker
+                    L.circleMarker([lat, lon], {
+                        radius: 5, color: '#00bfff', fillColor: '#00bfff', fillOpacity: 0.6
+                    }).bindPopup(`
+                        <div style="background:#222; color:#00bfff; padding:5px;">
+                            <b>DIGITAL TWIN</b><br>
+                            Wind: ${twin.interpolated_wind_speed_ms.toFixed(1)} m/s @ ${twin.interpolated_wind_dir_deg.toFixed(0)}°<br>
+                            Temp: ${twin.interpolated_temp_c.toFixed(1)}°C<br>
+                            Humidity: ${twin.interpolated_humidity.toFixed(0)}%
+                        </div>
+                    `).addTo(map).openPopup();
+                } else {
+                    document.getElementById('twinContent').innerHTML = '<p style="color:red;">No weather data available for this area.</p>';
+                }
+            } catch (err) {
+                document.getElementById('twinContent').innerHTML = '<p style="color:red;">Error fetching Digital Twin data.</p>';
+            }
+        });
+
+        // ─── dMRV Report: Click on plume sources ─────────────────────
+        let mrvTotalCO2e = 0;
+
+        async function fetchMrvReport(lat, lon) {
+            document.getElementById('mrvPanel').style.display = 'block';
+            document.getElementById('mrvContent').innerHTML = '<p style="color:#ffd700;">Generating 30-day dMRV report...</p>';
+
+            try {
+                const res = await fetch(`/api/mrv/report?lat=${lat}&lon=${lon}&radius=5000`);
+                if (res.ok) {
+                    const mrv = await res.json();
+                    mrvTotalCO2e += mrv.carbon_credits_equivalent_tons;
+                    document.getElementById('statCO2e').innerText = `${mrvTotalCO2e.toFixed(2)} tons`;
+
+                    const confColor = mrv.verification_confidence_score > 0.7 ? '#0f0' : (mrv.verification_confidence_score > 0.4 ? '#ffd700' : '#f00');
+
+                    document.getElementById('mrvContent').innerHTML = `
+                        <div class="mrv-row"><span>Location:</span> <span class="mrv-val">${mrv.location_lat.toFixed(4)}, ${mrv.location_lon.toFixed(4)}</span></div>
+                        <div class="mrv-row"><span>Period:</span> <span class="mrv-val">${mrv.report_period_days} days</span></div>
+                        <div class="mrv-row"><span>Detections:</span> <span class="mrv-val">${mrv.detections_count}</span></div>
+                        <div class="mrv-row"><span>Avg Rate:</span> <span class="mrv-val">${mrv.average_rate_kg_hr.toFixed(1)} kg/hr</span></div>
+                        <div class="mrv-row"><span>Total Emissions:</span> <span class="mrv-val">${mrv.total_emissions_kg.toFixed(0)} kg</span></div>
+                        <div class="mrv-row"><span>Baseline:</span> <span class="mrv-val">${mrv.baseline_rate_kg_hr.toFixed(1)} kg/hr</span></div>
+                        <div class="mrv-row"><span>Reduction:</span> <span class="mrv-val" style="color:#0f0">${mrv.estimated_reduction_percent.toFixed(1)}%</span></div>
+                        <div class="mrv-row"><span>CO2e Equivalent:</span> <span class="mrv-val" style="color:#ffd700">${mrv.carbon_credits_equivalent_tons.toFixed(2)} tons</span></div>
+                        <div class="mrv-row"><span>Confidence:</span> <span class="mrv-val" style="color:${confColor}">${(mrv.verification_confidence_score * 100).toFixed(0)}%</span></div>
+                        <hr style="border-color:#444">
+                        <p style="color:#888; font-size:11px;">Based on Prajesh et al. (2026) dMRV framework. GWP CH4 = 28x CO2.</p>
+                    `;
+                } else {
+                    document.getElementById('mrvContent').innerHTML = '<p style="color:red;">No emissions detected in this area in last 30 days.</p>';
+                }
+            } catch (err) {
+                document.getElementById('mrvContent').innerHTML = '<p style="color:red;">Error generating MRV report.</p>';
+            }
+        }
+
+        // Make fetchMrvReport available to plume popups
+        window.fetchMrvReport = fetchMrvReport;
     </script>
 </body>
 </html>
