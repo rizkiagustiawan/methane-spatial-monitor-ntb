@@ -687,10 +687,17 @@ impl PlumeAnalysisService {
         // CH4 GWP = 28 (IPCC AR6)
         let co2e = total_tonnes * 28.0;
 
-        // Wind uncertainty propagation (Conrad & Johnson, 2026)
-        let wind_uncertainty = 1.5; // m/s
-        let avg_wind = 3.0; // assume 3 m/s average
-        let uncertainty_percent = (wind_uncertainty / avg_wind) * 100.0;
+        // Assess terrain complexity (heuristic: near Rinjani is complex)
+        let dist_to_rinjani = crate::physics::gaussian_plume::haversine_distance_km(target_lat, target_lon, -8.41, 116.45);
+        let is_complex_terrain = dist_to_rinjani < 20.0;
+        
+        let model_uncertainty = crate::physics::uncertainty::terrain_aware_model_uncertainty(is_complex_terrain);
+        
+        let uncertainty_percent = crate::physics::uncertainty::total_uncertainty_percent(
+            crate::physics::uncertainty::SENSOR_EMISSION_UNCERTAINTY_PERCENT,
+            20.0, // average weather uncertainty
+            model_uncertainty,
+        );
 
         Ok(GhgEmissionReport {
             report_id: uuid::Uuid::new_v4().to_string(),

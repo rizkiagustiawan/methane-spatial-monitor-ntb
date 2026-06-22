@@ -525,6 +525,20 @@ pub mod uncertainty {
     /// We use ±50% as conservative estimate
     pub const GAUSSIAN_MODEL_UNCERTAINTY_PERCENT: f64 = 50.0;
 
+    /// Terrain-Aware Model Uncertainty
+    /// Source: Snoun et al. (2023) - Review of Gaussian models
+    /// 
+    /// Gaussian Plume uncertainty increases significantly in complex terrain.
+    /// Base uncertainty is 50%. If terrain elevation variance is high, 
+    /// uncertainty increases to 80%.
+    pub fn terrain_aware_model_uncertainty(is_complex_terrain: bool) -> f64 {
+        if is_complex_terrain {
+            80.0 // Complex terrain (e.g., Mount Rinjani slopes)
+        } else {
+            GAUSSIAN_MODEL_UNCERTAINTY_PERCENT // Flat terrain
+        }
+    }
+
     /// Total uncertainty (Root Sum Square)
     ///
     /// σ_total = √(σ_sensor² + σ_weather² + σ_model²)
