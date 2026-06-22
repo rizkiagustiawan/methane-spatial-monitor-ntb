@@ -38,6 +38,8 @@ pub struct WeatherObservation {
     pub wind_direction_deg: Option<f64>,
     pub humidity_percent: Option<f64>,
     pub temperature_c: Option<f64>,
+    #[serde(default)]
+    pub cloud_cover_percent: Option<f64>,
     pub data_source: String,
 }
 

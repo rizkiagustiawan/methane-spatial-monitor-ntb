@@ -340,7 +340,7 @@ impl PlumeAnalysisService {
     ) -> Result<AtmosphericState, AppError> {
         // Fetch latest weather from all 110 nodes
         let nodes = sqlx::query(
-            r#"SELECT area_id, wind_speed_ms, wind_direction_deg, temperature_c, humidity_percent
+            r#"SELECT area_id, wind_speed_ms, wind_direction_deg, temperature_c, humidity_percent, cloud_cover_percent
                FROM weather_observations 
                WHERE recorded_at > NOW() - INTERVAL '3 hours'"#,
         )
@@ -452,10 +452,27 @@ impl PlumeAnalysisService {
         // CH4 GWP is 28x CO2 over 100 years
         let carbon_credits = (total_emissions_kg / 1000.0) * 28.0;
 
-        // Baseline arbitrary set to 1500 kg/hr for demonstration
-        // Baseline can be dynamically retrieved or passed, but for now we set it dynamically to 1.5x the average if no input
-        let baseline = average_rate * 1.5;
-        let reduction = if average_rate < baseline {
+        // Baseline: Use the MAX emission rate from the last 90 days as the historical baseline
+        // Source: Prajesh et al. (2026) - dMRV framework requires historical reference
+        // This is scientifically sound because the baseline represents the worst-case scenario
+        // that the facility has demonstrated in the past.
+        let baseline_record = sqlx::query(
+            r#"SELECT MAX(emission_rate_kg_hr) as max_rate
+               FROM methane_observations 
+               WHERE ST_DWithin(location::geography, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3)
+                 AND recorded_at > NOW() - INTERVAL '90 days'"#
+        )
+        .bind(target_lon)
+        .bind(target_lat)
+        .bind(radius_m)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let baseline: f64 = baseline_record
+            .get::<Option<f64>, _>("max_rate")
+            .unwrap_or(average_rate * 2.0);
+
+        let reduction = if average_rate < baseline && baseline > 0.0 {
             ((baseline - average_rate) / baseline) * 100.0
         } else {
             0.0

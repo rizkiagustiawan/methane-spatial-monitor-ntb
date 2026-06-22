@@ -98,7 +98,7 @@ impl WeatherRepository {
         limit: i64,
     ) -> Result<Vec<WeatherObservation>, AppError> {
         let records = sqlx::query_as::<_, WeatherObservation>(
-            "SELECT recorded_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, data_source
+            "SELECT recorded_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, cloud_cover_percent, data_source
              FROM weather_observations ORDER BY recorded_at DESC LIMIT $1",
         )
         .bind(limit)
@@ -112,7 +112,7 @@ impl WeatherRepository {
         region: &str,
     ) -> Result<Option<WeatherObservation>, AppError> {
         let record = sqlx::query_as::<_, WeatherObservation>(
-            r#"SELECT recorded_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, data_source
+            r#"SELECT recorded_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, cloud_cover_percent, data_source
                FROM weather_observations 
                WHERE area_id = $1 AND recorded_at > NOW() - INTERVAL '6 hours'
                ORDER BY recorded_at DESC LIMIT 1"#,

@@ -947,7 +947,7 @@ async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl 
         }
 
         let weather = sqlx::query(
-            r#"SELECT wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c
+            r#"SELECT wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, cloud_cover_percent
                FROM weather_observations 
                WHERE area_id = $1 AND recorded_at > NOW() - INTERVAL '6 hours'
                ORDER BY recorded_at DESC LIMIT 1"#,
@@ -966,11 +966,12 @@ async fn get_multi_plume_prediction(State(state): State<Arc<AppState>>) -> impl 
         let wd: Option<f64> = w.get("wind_direction_deg");
         let hum: Option<f64> = w.get("humidity_percent");
         let temp: Option<f64> = w.get("temperature_c");
+        let cloud_cover: Option<f64> = w.get("cloud_cover_percent");
         let ws = ws.unwrap_or(1.0);
         let wd = wd.unwrap_or(0.0);
         let hum = hum.unwrap_or(70.0);
         let _temp = temp.unwrap_or(25.0);
-        let cloud_cover = 50.0; // Default to partly cloudy if not available
+        let cloud_cover = cloud_cover.unwrap_or(50.0);
 
         // Apply humidity attenuation using Beer-Lambert Law
         // Source: HITRAN Database, Radiative Transfer Theory
@@ -1715,9 +1716,9 @@ async fn bmkg_tracker_task(state: Arc<AppState>) {
                             .and_then(|l| l.first())
                         {
                             let _ = sqlx::query(
-                                "INSERT INTO weather_observations (recorded_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, data_source) VALUES (NOW(), $1, $2, $3, $4, $5, 'BMKG')",
+                                "INSERT INTO weather_observations (recorded_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, cloud_cover_percent, data_source) VALUES (NOW(), $1, $2, $3, $4, $5, $6, 'BMKG')",
                             )
-                            .bind(name).bind(item.ws / 3.6).bind(item.wd_deg).bind(item.hu).bind(item.t)
+                            .bind(name).bind(item.ws / 3.6).bind(item.wd_deg).bind(item.hu).bind(item.t).bind(item.tcc)
                             .execute(&state.pool).await;
                             success = true;
                             ws::broadcast_weather_update(
@@ -1738,9 +1739,9 @@ async fn bmkg_tracker_task(state: Arc<AppState>) {
                     if let Ok(res) = state.http_client.get(&om_url).send().await {
                         if let Ok(json) = res.json::<OpenMeteoResponse>().await {
                             let _ = sqlx::query(
-                                "INSERT INTO weather_observations (recorded_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, data_source) VALUES (NOW(), $1, $2, $3, $4, $5, 'Open-Meteo')",
+                                "INSERT INTO weather_observations (recorded_at, area_id, wind_speed_ms, wind_direction_deg, humidity_percent, temperature_c, cloud_cover_percent, data_source) VALUES (NOW(), $1, $2, $3, $4, $5, $6, 'Open-Meteo')",
                             )
-                            .bind(name).bind(json.current.wind_speed_10m / 3.6).bind(json.current.wind_direction_10m).bind(json.current.relative_humidity_2m).bind(json.current.temperature_2m)
+                            .bind(name).bind(json.current.wind_speed_10m / 3.6).bind(json.current.wind_direction_10m).bind(json.current.relative_humidity_2m).bind(json.current.temperature_2m).bind(50.0_f64)
                             .execute(&state.pool).await;
                             ws::broadcast_weather_update(
                                 &state.ws_state.tx,

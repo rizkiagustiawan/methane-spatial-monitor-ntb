@@ -25,6 +25,7 @@ CREATE TABLE weather_observations (
     wind_direction_deg DOUBLE PRECISION,
     humidity_percent DOUBLE PRECISION,
     temperature_c DOUBLE PRECISION,
+    cloud_cover_percent DOUBLE PRECISION DEFAULT 50.0,
     data_source VARCHAR(50) NOT NULL DEFAULT 'Unknown'
 );
 
