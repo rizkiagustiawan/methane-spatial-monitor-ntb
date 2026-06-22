@@ -662,6 +662,82 @@ pub struct EsgComplianceSummary {
     pub data_quality_score: f64, // 0-100
 }
 
+// ─── Audit-Ready Models ──────────────────────────────────────────────────────
+// Source: ISO 14064-1:2018, GHG Protocol
+
+/// Audit trail entry for complete traceability
+#[derive(Debug, Serialize, Clone)]
+pub struct AuditTrailEntry {
+    pub timestamp: DateTime<Utc>,
+    pub operation: String,
+    pub input_data: serde_json::Value,
+    pub output_data: serde_json::Value,
+    pub methodology: String,
+    pub uncertainty: f64,
+    pub source_references: Vec<String>,
+}
+
+/// Data lineage for source tracking
+#[derive(Debug, Serialize, Clone)]
+pub struct DataLineage {
+    pub data_source: String,
+    pub collection_method: String,
+    pub timestamp: DateTime<Utc>,
+    pub quality_score: f64,
+    pub uncertainty: f64,
+    pub references: Vec<String>,
+}
+
+/// Methodology documentation for auditors
+#[derive(Debug, Serialize, Clone)]
+pub struct MethodologyDoc {
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub assumptions: Vec<String>,
+    pub limitations: Vec<String>,
+    pub references: Vec<String>,
+    pub equations: Vec<String>,
+}
+
+/// Audit-ready export format
+#[derive(Debug, Serialize, Clone)]
+pub struct AuditExport {
+    pub facility_name: String,
+    pub reporting_period: String,
+    pub generated_at: DateTime<Utc>,
+    pub methodology: MethodologyDoc,
+    pub data_lineage: Vec<DataLineage>,
+    pub audit_trail: Vec<AuditTrailEntry>,
+    pub emissions_summary: GhgEmissionReport,
+    pub uncertainty_analysis: UncertaintyAnalysis,
+    pub compliance_checklist: ComplianceChecklist,
+}
+
+/// Uncertainty analysis for auditors
+#[derive(Debug, Serialize, Clone)]
+pub struct UncertaintyAnalysis {
+    pub total_uncertainty_percent: f64,
+    pub wind_uncertainty_ms: f64,
+    pub sensor_uncertainty_percent: f64,
+    pub model_uncertainty_percent: f64,
+    pub propagation_method: String,
+    pub confidence_level: String,
+}
+
+/// Compliance checklist for ISO 14064
+#[derive(Debug, Serialize, Clone)]
+pub struct ComplianceChecklist {
+    pub ghg_boundary_defined: bool,
+    pub emission_sources_identified: bool,
+    pub methodology_documented: bool,
+    pub data_quality_assessed: bool,
+    pub uncertainty_quantified: bool,
+    pub results_documented: bool,
+    pub third_party_verification: bool,
+    pub recommendations: Vec<String>,
+}
+
 #[cfg(test)]
 mod emit_tests {
     use super::*;

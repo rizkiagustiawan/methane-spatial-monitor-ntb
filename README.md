@@ -135,6 +135,12 @@ openapi.yaml      # API documentation (OpenAPI 3.0.3)
 | GET | `/api/esg/carbon-credits` | Carbon credit calculation (CO2e) |
 | GET | `/api/esg/compliance` | ESG compliance summary |
 
+### Audit-Ready API
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/audit/export` | Complete audit export with traceability |
+| GET | `/api/audit/methodology` | Methodology documentation for auditors |
+
 ### STAC API (SpatioTemporal Asset Catalog)
 | Method | Endpoint | Description |
 |--------|----------|-------------|

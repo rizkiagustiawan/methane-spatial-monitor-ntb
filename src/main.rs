@@ -210,6 +210,8 @@ async fn main() {
         .route("/api/esg/trend", get(get_emission_trend))
         .route("/api/esg/carbon-credits", get(get_carbon_credits))
         .route("/api/esg/compliance", get(get_esg_compliance))
+        .route("/api/audit/export", get(get_audit_export))
+        .route("/api/audit/methodology", get(get_methodology))
         .route("/ws", get(ws::ws_handler))
         .route("/api/stac", get(stac_root))
         .route("/api/stac/collections", get(stac_collections))
@@ -917,6 +919,38 @@ async fn get_esg_compliance(
         )
             .into_response(),
     }
+}
+
+// ─── AUDIT-READY HANDLERS ────────────────────────────────────────────────────
+
+async fn get_audit_export(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<EsgParams>,
+) -> impl IntoResponse {
+    let alert_svc = Arc::new(AlertService::new(
+        state.pool.clone(),
+        state.http_client.clone(),
+        state.config.telegram.bot_token.clone(),
+        state.config.telegram.chat_id.clone(),
+    ));
+    let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
+    
+    let name = params.name.unwrap_or_else(|| "Unknown Facility".to_string());
+    let radius = params.radius.unwrap_or(5000.0);
+
+    match service.generate_audit_export(&name, params.lon, params.lat, radius).await {
+        Ok(export) => (axum::http::StatusCode::OK, axum::response::Json(export)).into_response(),
+        Err(e) => (
+            axum::http::StatusCode::NOT_FOUND,
+            axum::response::Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+async fn get_methodology() -> impl IntoResponse {
+    let methodology = PlumeAnalysisService::get_methodology_documentation();
+    (axum::http::StatusCode::OK, axum::response::Json(methodology))
 }
 
 // ─── PHYSICS & DISPERSION ────────────────────────────────────────────────────
