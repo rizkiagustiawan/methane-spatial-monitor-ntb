@@ -157,6 +157,32 @@ pub mod atmospheric {
     ];
 }
 
+// ─── CORRECTIONS ──────────────────────────────────────────────────────────────
+
+#[allow(dead_code)]
+pub mod corrections {
+    /// TROPOMI Latitude Bias Correction
+    /// Source: Balasus et al. (2023) - Atmospheric Measurement Techniques
+    /// 
+    /// Tropical latitudes (like NTB at ~8°S) often have a systematic bias in TROPOMI 
+    /// XCH4 retrievals due to high solar zenith angles and aerosol interference.
+    /// Balasus et al. used GOSAT to build an ML bias correction. 
+    /// For the 0-10°S band, the average bias correction is ~ +12 ppb (0.012 ppm).
+    pub const TROPOMI_TROPICAL_BIAS_PPB: f64 = 12.0;
+
+    /// Landfill Emission Underreporting Factor
+    /// Source: Dogniaux et al. (2025) - Nature
+    /// 
+    /// Global GHGSat survey reveals MSW landfill emissions are on average 
+    /// 1.4x higher than IPCC inventory estimates.
+    pub const LANDFILL_UNDERREPORTING_FACTOR: f64 = 1.4;
+
+    /// Apply tropical bias correction to TROPOMI/S5P concentration (ppb)
+    pub fn correct_tropomi_bias(concentration_ppb: f64) -> f64 {
+        concentration_ppb + TROPOMI_TROPICAL_BIAS_PPB
+    }
+}
+
 // ─── GAUSSIAN PLUME MODEL ───────────────────────────────────────────────────
 // Source: Turner (1970), ISC3 Manual, EPA guidelines
 

@@ -845,7 +845,7 @@ impl PlumeAnalysisService {
         .fetch_all(&self.pool)
         .await?;
 
-        let baseline_avg = if baseline_records.is_empty() {
+        let mut baseline_avg = if baseline_records.is_empty() {
             0.0
         } else {
             baseline_records
@@ -855,7 +855,7 @@ impl PlumeAnalysisService {
                 / baseline_records.len() as f64
         };
 
-        let current_avg = if current_records.is_empty() {
+        let mut current_avg = if current_records.is_empty() {
             0.0
         } else {
             current_records
@@ -864,6 +864,14 @@ impl PlumeAnalysisService {
                 .sum::<f64>()
                 / current_records.len() as f64
         };
+
+        // Apply Landfill Underreporting Factor (Dogniaux et al. 2025, Nature)
+        // If query is near TPA Kebon Kongok (-8.6464, 116.0904)
+        let dist_to_tpa = crate::physics::gaussian_plume::haversine_distance_km(target_lat, target_lon, -8.6464, 116.0904);
+        if dist_to_tpa < 5.0 {
+            baseline_avg *= crate::physics::corrections::LANDFILL_UNDERREPORTING_FACTOR;
+            current_avg *= crate::physics::corrections::LANDFILL_UNDERREPORTING_FACTOR;
+        }
 
         let baseline_tonnes = (baseline_avg * 24.0 * baseline_days as f64) / 1000.0;
         let current_tonnes = (current_avg * 24.0 * current_days as f64) / 1000.0;
