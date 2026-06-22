@@ -831,12 +831,17 @@ async fn get_ghg_report(
         state.config.telegram.chat_id.clone(),
     ));
     let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
-    
-    let name = params.name.unwrap_or_else(|| "Unknown Facility".to_string());
+
+    let name = params
+        .name
+        .unwrap_or_else(|| "Unknown Facility".to_string());
     let radius = params.radius.unwrap_or(5000.0);
     let period = params.period.unwrap_or(30);
 
-    match service.generate_ghg_report(&name, params.lon, params.lat, radius, period).await {
+    match service
+        .generate_ghg_report(&name, params.lon, params.lat, radius, period)
+        .await
+    {
         Ok(report) => (axum::http::StatusCode::OK, axum::response::Json(report)).into_response(),
         Err(e) => (
             axum::http::StatusCode::NOT_FOUND,
@@ -859,7 +864,10 @@ async fn get_emission_trend(
     let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
     let radius = params.radius.unwrap_or(5000.0);
 
-    match service.generate_emission_trend(params.lon, params.lat, radius).await {
+    match service
+        .generate_emission_trend(params.lon, params.lat, radius)
+        .await
+    {
         Ok(trends) => (axum::http::StatusCode::OK, axum::response::Json(trends)).into_response(),
         Err(e) => (
             axum::http::StatusCode::NOT_FOUND,
@@ -880,13 +888,18 @@ async fn get_carbon_credits(
         state.config.telegram.chat_id.clone(),
     ));
     let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
-    
-    let name = params.name.unwrap_or_else(|| "Unknown Facility".to_string());
+
+    let name = params
+        .name
+        .unwrap_or_else(|| "Unknown Facility".to_string());
     let radius = params.radius.unwrap_or(5000.0);
     let baseline = params.baseline.unwrap_or(90);
     let current = params.current.unwrap_or(30);
 
-    match service.generate_carbon_credit_report(&name, params.lon, params.lat, radius, baseline, current).await {
+    match service
+        .generate_carbon_credit_report(&name, params.lon, params.lat, radius, baseline, current)
+        .await
+    {
         Ok(report) => (axum::http::StatusCode::OK, axum::response::Json(report)).into_response(),
         Err(e) => (
             axum::http::StatusCode::NOT_FOUND,
@@ -907,11 +920,16 @@ async fn get_esg_compliance(
         state.config.telegram.chat_id.clone(),
     ));
     let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
-    
-    let name = params.name.unwrap_or_else(|| "Unknown Facility".to_string());
+
+    let name = params
+        .name
+        .unwrap_or_else(|| "Unknown Facility".to_string());
     let radius = params.radius.unwrap_or(5000.0);
 
-    match service.generate_esg_summary(&name, params.lon, params.lat, radius).await {
+    match service
+        .generate_esg_summary(&name, params.lon, params.lat, radius)
+        .await
+    {
         Ok(summary) => (axum::http::StatusCode::OK, axum::response::Json(summary)).into_response(),
         Err(e) => (
             axum::http::StatusCode::NOT_FOUND,
@@ -934,11 +952,16 @@ async fn get_audit_export(
         state.config.telegram.chat_id.clone(),
     ));
     let service = PlumeAnalysisService::new(state.pool.clone(), alert_svc);
-    
-    let name = params.name.unwrap_or_else(|| "Unknown Facility".to_string());
+
+    let name = params
+        .name
+        .unwrap_or_else(|| "Unknown Facility".to_string());
     let radius = params.radius.unwrap_or(5000.0);
 
-    match service.generate_audit_export(&name, params.lon, params.lat, radius).await {
+    match service
+        .generate_audit_export(&name, params.lon, params.lat, radius)
+        .await
+    {
         Ok(export) => (axum::http::StatusCode::OK, axum::response::Json(export)).into_response(),
         Err(e) => (
             axum::http::StatusCode::NOT_FOUND,
@@ -950,7 +973,10 @@ async fn get_audit_export(
 
 async fn get_methodology() -> impl IntoResponse {
     let methodology = PlumeAnalysisService::get_methodology_documentation();
-    (axum::http::StatusCode::OK, axum::response::Json(methodology))
+    (
+        axum::http::StatusCode::OK,
+        axum::response::Json(methodology),
+    )
 }
 
 // ─── PHYSICS & DISPERSION ────────────────────────────────────────────────────

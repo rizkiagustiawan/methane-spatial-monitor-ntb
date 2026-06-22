@@ -668,7 +668,9 @@ impl PlumeAnalysisService {
         .await?;
 
         if records.is_empty() {
-            return Err(AppError::NotFound("No emissions detected in this area".into()));
+            return Err(AppError::NotFound(
+                "No emissions detected in this area".into(),
+            ));
         }
 
         let mut sum_rate = 0.0;
@@ -743,11 +745,14 @@ impl PlumeAnalysisService {
         .await?;
 
         if records.is_empty() {
-            return Err(AppError::NotFound("No emissions detected in this area".into()));
+            return Err(AppError::NotFound(
+                "No emissions detected in this area".into(),
+            ));
         }
 
         // Group by month
-        let mut monthly: std::collections::BTreeMap<String, Vec<f64>> = std::collections::BTreeMap::new();
+        let mut monthly: std::collections::BTreeMap<String, Vec<f64>> =
+            std::collections::BTreeMap::new();
         for row in &records {
             let rate: f64 = row.get("emission_rate_kg_hr");
             let dt: DateTime<Utc> = row.get("recorded_at");
@@ -765,9 +770,14 @@ impl PlumeAnalysisService {
 
             let trend = if let Some(prev) = prev_avg {
                 let change = ((avg - prev) / prev) * 100.0;
-                if change > 10.0 { "increasing" }
-                else if change < -10.0 { "decreasing" }
-                else { "stable" }.to_string()
+                if change > 10.0 {
+                    "increasing"
+                } else if change < -10.0 {
+                    "decreasing"
+                } else {
+                    "stable"
+                }
+                .to_string()
             } else {
                 "baseline".to_string()
             };
@@ -798,7 +808,7 @@ impl PlumeAnalysisService {
     /// Source: IPCC AR6 GWP values
     pub async fn generate_carbon_credit_report(
         &self,
-        facility_name: &str,
+        _facility_name: &str,
         target_lon: f64,
         target_lat: f64,
         radius_m: f64,
@@ -838,13 +848,21 @@ impl PlumeAnalysisService {
         let baseline_avg = if baseline_records.is_empty() {
             0.0
         } else {
-            baseline_records.iter().map(|r| r.get::<f64, _>("emission_rate_kg_hr")).sum::<f64>() / baseline_records.len() as f64
+            baseline_records
+                .iter()
+                .map(|r| r.get::<f64, _>("emission_rate_kg_hr"))
+                .sum::<f64>()
+                / baseline_records.len() as f64
         };
 
         let current_avg = if current_records.is_empty() {
             0.0
         } else {
-            current_records.iter().map(|r| r.get::<f64, _>("emission_rate_kg_hr")).sum::<f64>() / current_records.len() as f64
+            current_records
+                .iter()
+                .map(|r| r.get::<f64, _>("emission_rate_kg_hr"))
+                .sum::<f64>()
+                / current_records.len() as f64
         };
 
         let baseline_tonnes = (baseline_avg * 24.0 * baseline_days as f64) / 1000.0;
@@ -884,8 +902,10 @@ impl PlumeAnalysisService {
         target_lat: f64,
         radius_m: f64,
     ) -> Result<EsgComplianceSummary, AppError> {
-        let report = self.generate_ghg_report(facility_name, target_lon, target_lat, radius_m, 30).await?;
-        
+        let report = self
+            .generate_ghg_report(facility_name, target_lon, target_lat, radius_m, 30)
+            .await?;
+
         let recommendations = vec![
             "Implement continuous monitoring with ground-based sensors".to_string(),
             "Conduct third-party verification for carbon credit eligibility".to_string(),
@@ -893,9 +913,13 @@ impl PlumeAnalysisService {
             "Document all data sources and methodologies for audit trail".to_string(),
         ];
 
-        let data_quality = if report.uncertainty_percent < 30.0 { 90.0 }
-        else if report.uncertainty_percent < 50.0 { 70.0 }
-        else { 50.0 };
+        let data_quality = if report.uncertainty_percent < 30.0 {
+            90.0
+        } else if report.uncertainty_percent < 50.0 {
+            70.0
+        } else {
+            50.0
+        };
 
         Ok(EsgComplianceSummary {
             facility_name: facility_name.to_string(),
@@ -919,7 +943,9 @@ impl PlumeAnalysisService {
         target_lat: f64,
         radius_m: f64,
     ) -> Result<AuditExport, AppError> {
-        let report = self.generate_ghg_report(facility_name, target_lon, target_lat, radius_m, 30).await?;
+        let report = self
+            .generate_ghg_report(facility_name, target_lon, target_lat, radius_m, 30)
+            .await?;
 
         // Build data lineage
         let data_lineage = vec![
@@ -940,9 +966,7 @@ impl PlumeAnalysisService {
                 timestamp: Utc::now(),
                 quality_score: 80.0,
                 uncertainty: 45.0,
-                references: vec![
-                    "NASA EMIT Documentation".to_string(),
-                ],
+                references: vec!["NASA EMIT Documentation".to_string()],
             },
             DataLineage {
                 data_source: "Sentinel-5P".to_string(),
@@ -950,9 +974,7 @@ impl PlumeAnalysisService {
                 timestamp: Utc::now(),
                 quality_score: 70.0,
                 uncertainty: 50.0,
-                references: vec![
-                    "ESA Sentinel-5P Documentation".to_string(),
-                ],
+                references: vec!["ESA Sentinel-5P Documentation".to_string()],
             },
         ];
 
@@ -974,10 +996,7 @@ impl PlumeAnalysisService {
                 output_data: serde_json::json!({"dispersion_modeled": true}),
                 methodology: "Gaussian Plume with Pasquill-Gifford classification".to_string(),
                 uncertainty: 50.0,
-                source_references: vec![
-                    "Turner (1970)".to_string(),
-                    "Briggs (1973)".to_string(),
-                ],
+                source_references: vec!["Turner (1970)".to_string(), "Briggs (1973)".to_string()],
             },
             AuditTrailEntry {
                 timestamp: Utc::now(),
@@ -1073,7 +1092,8 @@ impl PlumeAnalysisService {
             name: "Gaussian Plume Model with Satellite Remote Sensing".to_string(),
             version: "1.0.0".to_string(),
             description: "Methane emission quantification using Gaussian plume dispersion model \
-                          with satellite remote sensing data.".to_string(),
+                          with satellite remote sensing data."
+                .to_string(),
             assumptions: vec![
                 "Steady-state emission conditions".to_string(),
                 "Flat terrain assumption (with terrain blocking correction)".to_string(),
