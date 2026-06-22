@@ -43,10 +43,18 @@ Advanced real-time methane emission tracking, Gaussian dispersion prediction, an
 - Background tasks handle paginated STAC ingestion and multi-source weather fetching.
 - **EMIT Fallback:** NASA EMIT STAC API as fallback when Carbon Mapper fails.
 - **Sentinel-5P:** Macro-scale early warning via Microsoft Planetary Computer.
-- **AI Data Fusion:** Fills temporal gaps when high-res satellites are occluded by clouds, crossing S5P macro detections with historical point-source data.
+- **AI Data Fusion:** Fills temporal gaps when high-res satellites are occluded by clouds.
 - Weather forecast integration (Open-Meteo, 2-day hourly forecast).
 - Triggers real-time **Telegram Evacuation Alerts** when toxic concentration footprints intersect mapped populated areas (e.g., Kota Mataram, Sembalun).
 - Features automated 30-day weather data retention policies.
+
+### 6. **Professional Cartographic Export:**
+- **Print Map:** Generate professional print-ready maps with full cartographic elements.
+- **Scale Bar:** Dynamic scale bar that updates with zoom level.
+- **North Arrow:** SVG-based compass indicator.
+- **Coordinate Grid:** Real-time lat/lon display on mouse movement.
+- **Export to PDF:** Browser-native PDF export with print-optimized styling.
+- **Metadata:** Automatic generation timestamp, coordinates, and data source attribution.
 
 ### 6. **Elite Tier Features (Research-Grade 2026):**
 - **Atmospheric Digital Twin (IDW):** Creates a continuous 3D weather grid by interpolating data from 110 weather nodes using Inverse Distance Weighting, allowing predictions even when satellites are occluded.

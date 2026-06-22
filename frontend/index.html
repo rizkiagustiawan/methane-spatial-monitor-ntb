@@ -63,6 +63,38 @@
             padding: 6px 16px; font-size: 12px; border: 1px solid #333;
         }
 
+        .print-panel {
+            position: absolute; top: 20px; left: 20px; z-index: 1000;
+            background: rgba(0,0,0,0.9); border: 1px solid #ffd700; padding: 15px;
+            width: 200px;
+        }
+        .print-panel h3 { margin: 0 0 10px 0; color: #ffd700; font-size: 14px; }
+        .print-btn {
+            background: #ffd700; color: #000; border: none; padding: 8px 16px;
+            cursor: pointer; width: 100%; font-weight: bold; margin-bottom: 5px;
+        }
+        .print-btn:hover { background: #ffed4a; }
+
+        .north-arrow {
+            position: absolute; top: 80px; right: 20px; z-index: 1000;
+            background: rgba(0,0,0,0.8); border: 1px solid #555; padding: 10px;
+            text-align: center; color: #fff;
+        }
+        .north-arrow svg { width: 40px; height: 40px; }
+        .north-label { font-size: 12px; margin-top: 5px; }
+
+        .scale-bar {
+            position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; background: rgba(0,0,0,0.8); border: 1px solid #555;
+            padding: 8px 16px; text-align: center; color: #fff; font-size: 12px;
+        }
+
+        .coord-grid {
+            position: absolute; bottom: 80px; right: 20px; z-index: 1000;
+            background: rgba(0,0,0,0.8); border: 1px solid #555; padding: 8px;
+            color: #888; font-size: 11px;
+        }
+
         .legend {
             position: absolute; bottom: 20px; right: 20px; z-index: 1000;
             background: rgba(0,0,0,0.8); border: 1px solid #555; padding: 15px;
@@ -100,6 +132,23 @@
     </div>
 
     <div class="click-hint">Click anywhere on the map for Digital Twin weather | Click on a plume for dMRV report</div>
+
+    <div class="print-panel">
+        <h3>PRINT MAP</h3>
+        <button class="print-btn" onclick="printMap()">Print Map</button>
+        <button class="print-btn" onclick="exportPDF()">Export PDF</button>
+    </div>
+
+    <div class="north-arrow">
+        <svg viewBox="0 0 40 40">
+            <polygon points="20,5 25,20 20,15 15,20" fill="#fff"/>
+            <polygon points="20,5 25,20 20,15" fill="#ff0000"/>
+            <text x="20" y="35" text-anchor="middle" fill="#fff" font-size="12">N</text>
+        </svg>
+    </div>
+
+    <div class="scale-bar" id="scaleBar">Scale: ~10 km</div>
+    <div class="coord-grid" id="coordGrid">Lat: -8.65 | Lon: 116.12</div>
 
     <div class="legend">
         <div class="legend-item"><div class="legend-color" style="background:#0f0; border-radius:50%"></div> Methane Plume Source</div>
@@ -496,6 +545,121 @@
 
         // Make fetchMrvReport available to plume popups
         window.fetchMrvReport = fetchMrvReport;
+
+        // ─── Print & Export Functions ───────────────────────────────────
+
+        // Update scale bar based on zoom level
+        function updateScaleBar() {
+            const zoom = map.getZoom();
+            const scale = Math.round(40075016.686 * Math.cos(map.getCenter().lat * Math.PI / 180) / Math.pow(2, zoom + 8));
+            let scaleText;
+            if (scale >= 1000) scaleText = `Scale: ${(scale/1000).toFixed(1)} km`;
+            else scaleText = `Scale: ${scale} m`;
+            document.getElementById('scaleBar').innerText = scaleText;
+        }
+
+        // Update coordinate display
+        map.on('mousemove', function(e) {
+            document.getElementById('coordGrid').innerText = 
+                `Lat: ${e.latlng.lat.toFixed(4)} | Lon: ${e.latlng.lng.toFixed(4)}`;
+        });
+
+        map.on('zoomend', updateScaleBar);
+        updateScaleBar();
+
+        // Print map function
+        function printMap() {
+            const printWindow = window.open('', '_blank');
+            const mapContainer = document.getElementById('map');
+            const mapHtml = mapContainer.outerHTML;
+            
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>NTB Methane Tracker - Map Print</title>
+                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+                    <style>
+                        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+                        .print-header { text-align: center; margin-bottom: 20px; }
+                        .print-header h1 { margin: 0; font-size: 24px; }
+                        .print-header p { margin: 5px 0; color: #666; }
+                        .print-footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+                        .map-container { width: 100%; height: 70vh; }
+        </head>
+                <body>
+                    <div class="print-header">
+                        <h1>NTB Methane Tracker</h1>
+                        <p>Generated: ${new Date().toLocaleString()}</p>
+                        <p>Coordinates: ${map.getCenter().lat.toFixed(4)}, ${map.getCenter().lng.toFixed(4)} | Zoom: ${map.getZoom()}</p>
+                    </div>
+                    <div class="map-container">${mapHtml}</div>
+                    <div class="print-footer">
+                        <p>Data Sources: Carbon Mapper, NASA EMIT, Sentinel-5P, BMKG</p>
+                        <p>Generated by NTB Methane Tracker - GeoESG A.E.C.O</p>
+                    </div>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            setTimeout(() => { printWindow.print(); }, 1000);
+        }
+
+        // Export PDF function (uses browser print)
+        function exportPDF() {
+            // Add print-specific styles
+            const style = document.createElement('style');
+            style.id = 'print-style';
+            style.textContent = `
+                @media print {
+                    body { background: white !important; }
+                    .dashboard, .mrv-panel, .twin-panel, .click-hint, .print-panel { display: none !important; }
+                    .map-title { background: white !important; color: black !important; border: 2px solid black !important; }
+                    .legend { background: white !important; color: black !important; border: 2px solid black !important; }
+                    .legend-item { color: black !important; }
+                    .north-arrow { background: white !important; }
+                    .north-arrow svg polygon { fill: black !important; }
+                    .north-arrow text { fill: black !important; }
+                    .scale-bar { background: white !important; color: black !important; border: 2px solid black !important; }
+                    .coord-grid { background: white !important; color: black !important; border: 2px solid black !important; }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            // Add title and metadata for print
+            const titleDiv = document.createElement('div');
+            titleDiv.id = 'print-title';
+            titleDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;background:white;padding:10px;text-align:center;z-index:10000;display:none;';
+            titleDiv.innerHTML = `
+                <h1 style="margin:0;font-size:20px;">NTB Methane Tracker - Map Report</h1>
+                <p style="margin:5px 0;font-size:12px;color:#666;">
+                    Generated: ${new Date().toLocaleString()} | 
+                    Location: ${map.getCenter().lat.toFixed(4)}, ${map.getCenter().lng.toFixed(4)} | 
+                    Zoom: ${map.getZoom()}
+                </p>
+            `;
+            document.body.appendChild(titleDiv);
+            
+            // Show title for print
+            if (window.matchMedia) {
+                const mediaQueryList = window.matchMedia('print');
+                mediaQueryList.addListener(function(mql) {
+                    if (mql.matches) {
+                        titleDiv.style.display = 'block';
+                    } else {
+                        titleDiv.style.display = 'none';
+                    }
+                });
+            }
+            
+            window.print();
+            
+            // Cleanup
+            setTimeout(() => {
+                style.remove();
+                titleDiv.remove();
+            }, 1000);
+        }
     </script>
 </body>
 </html>
