@@ -189,6 +189,19 @@ Based on Tanager-1 satellite specifications (Source: Carbon Mapper Product Guide
 | CH4 Absorption (2200nm) | 1.0e-21 cm²/molecule | HITRAN Database |
 | Cloud Cover Integration | BMKG `tcc` field | Suzuki (2025) |
 | dMRV Baseline | MAX emission 90 days | Prajesh et al. (2026) |
+| Landfill Underreporting Factor | 1.4x | Dogniaux et al. (2025, Nature) |
+| Tropical TROPOMI Bias Correction | +12 ppb | Balasus et al. (2023) |
+
+## Limitations & Scientific Honesty
+This system is designed with **Brutal Honesty** regarding the laws of physics and the inherent limitations of remote sensing. We actively prevent overclaiming through hard-coded architectural constraints:
+
+1. **Snapshot vs Continuous:** Satellites provide a snapshot in time. They are *not* 24/7 continuous CCTV cameras. Plumes can start or stop between orbital passes.
+2. **Orbital Revisit Time:** Low Earth Orbit (LEO) satellites like Sentinel-5P pass over NTB roughly once a day. High-res satellites (Carbon Mapper/EMIT) have even lower revisit frequencies.
+3. **Cloud Contamination (Data Drought):** Heavy cloud cover blocks 100% of optical Shortwave Infrared (SWIR) detection. NTB is in a humid tropical zone, meaning optical satellite data yield drops significantly during the rainy season.
+4. **Gaussian vs Complex Terrain:** The built-in Gaussian Plume model assumes flat terrain and steady winds. While we apply a *Terrain-Aware Uncertainty Factor* (raising error margins to ±80% near Mount Rinjani), it is not a substitute for supercomputer-level Computational Fluid Dynamics (CFD).
+5. **Spatial Resolution Limits:** Sentinel-5P provides early warnings over a 5.5 x 7 km² pixel. It tells us *which district* has a spike in methane, but it **cannot** pinpoint which exact pipe or building is leaking.
+
+These limitations are permanently embedded in the `/api/mrv/report` payload disclaimers to ensure auditors and stakeholders understand that satellite dMRV is an estimation tool, not a physical ground-truth sensor.
 
 ## Data Sources & Coverage
 
