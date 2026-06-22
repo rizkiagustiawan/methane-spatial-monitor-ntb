@@ -1,5 +1,4 @@
 use crate::errors::AppError;
-use tract_onnx::prelude::*;
 use crate::models::*;
 use crate::physics::*;
 use crate::repositories::*;
@@ -11,6 +10,7 @@ use sqlx::Row;
 /// Separates business logic from HTTP handlers
 /// Each service handles one domain
 use std::sync::Arc;
+use tract_onnx::prelude::*;
 use uuid::Uuid;
 
 /// Get region from coordinates
@@ -226,7 +226,7 @@ pub struct PlumeAnalysisService {
 #[allow(dead_code)]
 impl PlumeAnalysisService {
     pub fn new(
-        pool: PgPool, 
+        pool: PgPool,
         alert_service: Arc<AlertService>,
         fusion_model: Option<FusionModel>,
     ) -> Self {
@@ -313,15 +313,18 @@ impl PlumeAnalysisService {
                     // Physics-Aware Confidence Scoring with Multi-Satellite Cross-Validation
                     // S5P enhanced + historical high rate
                     let mut confidence = 0.6; // Base 60% (Medium - S5P confirms regional, but point source unconfirmed today)
-                    
+
                     if rate > 1000.0 {
                         confidence += 0.2; // 80% if historical leak was massive
                     }
-                    
+
                     // Cross-validation message
-                    let mut msg = "S5P detected regional gas. High-res satellite occluded. ".to_string();
+                    let mut msg =
+                        "S5P detected regional gas. High-res satellite occluded. ".to_string();
                     if confidence >= 0.8 {
-                        msg.push_str("Historical source was massive, high probability still active.");
+                        msg.push_str(
+                            "Historical source was massive, high probability still active.",
+                        );
                     } else {
                         msg.push_str("Historical source suspected active (possible false positive without high-res confirmation).");
                     }
@@ -335,7 +338,11 @@ impl PlumeAnalysisService {
                         s5p_scene_id: s5p.scene_id.clone(),
                         s5p_timestamp: s5p.start_datetime,
                         confidence_score: confidence,
-                        status: if confidence >= 0.8 { "HIGH_CONFIDENCE".to_string() } else { "MEDIUM_CONFIDENCE".to_string() },
+                        status: if confidence >= 0.8 {
+                            "HIGH_CONFIDENCE".to_string()
+                        } else {
+                            "MEDIUM_CONFIDENCE".to_string()
+                        },
                         message: msg,
                     });
                 }
@@ -702,11 +709,14 @@ impl PlumeAnalysisService {
         let co2e = total_tonnes * 28.0;
 
         // Assess terrain complexity (heuristic: near Rinjani is complex)
-        let dist_to_rinjani = crate::physics::gaussian_plume::haversine_distance_km(target_lat, target_lon, -8.41, 116.45);
+        let dist_to_rinjani = crate::physics::gaussian_plume::haversine_distance_km(
+            target_lat, target_lon, -8.41, 116.45,
+        );
         let is_complex_terrain = dist_to_rinjani < 20.0;
-        
-        let model_uncertainty = crate::physics::uncertainty::terrain_aware_model_uncertainty(is_complex_terrain);
-        
+
+        let model_uncertainty =
+            crate::physics::uncertainty::terrain_aware_model_uncertainty(is_complex_terrain);
+
         let uncertainty_percent = crate::physics::uncertainty::total_uncertainty_percent(
             crate::physics::uncertainty::SENSOR_EMISSION_UNCERTAINTY_PERCENT,
             20.0, // average weather uncertainty
@@ -888,7 +898,9 @@ impl PlumeAnalysisService {
 
         // Apply Landfill Underreporting Factor (Dogniaux et al. 2025, Nature)
         // If query is near TPA Kebon Kongok (-8.6464, 116.0904)
-        let dist_to_tpa = crate::physics::gaussian_plume::haversine_distance_km(target_lat, target_lon, -8.6464, 116.0904);
+        let dist_to_tpa = crate::physics::gaussian_plume::haversine_distance_km(
+            target_lat, target_lon, -8.6464, 116.0904,
+        );
         if dist_to_tpa < 5.0 {
             baseline_avg *= crate::physics::corrections::LANDFILL_UNDERREPORTING_FACTOR;
             current_avg *= crate::physics::corrections::LANDFILL_UNDERREPORTING_FACTOR;

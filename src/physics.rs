@@ -163,17 +163,17 @@ pub mod atmospheric {
 pub mod corrections {
     /// TROPOMI Latitude Bias Correction
     /// Source: Balasus et al. (2023) - Atmospheric Measurement Techniques
-    /// 
-    /// Tropical latitudes (like NTB at ~8°S) often have a systematic bias in TROPOMI 
+    ///
+    /// Tropical latitudes (like NTB at ~8°S) often have a systematic bias in TROPOMI
     /// XCH4 retrievals due to high solar zenith angles and aerosol interference.
-    /// Balasus et al. used GOSAT to build an ML bias correction. 
+    /// Balasus et al. used GOSAT to build an ML bias correction.
     /// For the 0-10°S band, the average bias correction is ~ +12 ppb (0.012 ppm).
     pub const TROPOMI_TROPICAL_BIAS_PPB: f64 = 12.0;
 
     /// Landfill Emission Underreporting Factor
     /// Source: Dogniaux et al. (2025) - Nature
-    /// 
-    /// Global GHGSat survey reveals MSW landfill emissions are on average 
+    ///
+    /// Global GHGSat survey reveals MSW landfill emissions are on average
     /// 1.4x higher than IPCC inventory estimates.
     pub const LANDFILL_UNDERREPORTING_FACTOR: f64 = 1.4;
 
@@ -527,9 +527,9 @@ pub mod uncertainty {
 
     /// Terrain-Aware Model Uncertainty
     /// Source: Snoun et al. (2023) - Review of Gaussian models
-    /// 
+    ///
     /// Gaussian Plume uncertainty increases significantly in complex terrain.
-    /// Base uncertainty is 50%. If terrain elevation variance is high, 
+    /// Base uncertainty is 50%. If terrain elevation variance is high,
     /// uncertainty increases to 80%.
     pub fn terrain_aware_model_uncertainty(is_complex_terrain: bool) -> f64 {
         if is_complex_terrain {
