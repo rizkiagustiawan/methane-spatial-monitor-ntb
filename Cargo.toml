@@ -30,6 +30,8 @@ gdal = { version = "0.19.0", features = ["bindgen"] }
 tower_governor = "0.4"
 thiserror = "2"
 rand = "0.8"
+tract-onnx = "0.21.6"
+ndarray = "0.16.1"
 
 [patch.crates-io]
 gdal = { git = "https://github.com/georust/gdal", rev = "968cf34a" }
